@@ -1,0 +1,55 @@
+appId: com.quill.desktop
+productName: Quill
+copyright: Copyright © 2026
+
+directories:
+  output: release/${version}
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+asar: true
+
+# Declare that Quill knows how to open Markdown files. On macOS this populates
+# Info.plist → CFBundleDocumentTypes, which is what Finder reads to populate
+# the "Open With" menu.
+fileAssociations:
+  - ext:
+      - md
+      - markdown
+      - mdown
+      - mkd
+    name: Markdown Document
+    role: Editor
+    rank: Default
+    icon: build/icon.icns
+
+mac:
+  icon: build/icon.icns
+  category: public.app-category.productivity
+  # No Apple Developer cert configured — produce an ad-hoc-signed build that
+  # runs locally (user may need to right-click → Open the first time).
+  identity: null
+  target:
+    - target: dmg
+      arch:
+        - arm64
+
+dmg:
+  writeUpdateInfo: false
+  artifactName: Quill-${version}-${arch}.dmg
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Office

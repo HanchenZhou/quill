@@ -1,0 +1,261 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  color-scheme: light;
+
+  /* Code block surface */
+  --code-bg: #f6f8fa;
+  --code-border: #d0d7de;
+  --code-fg: #1f2328;
+
+  /* highlight.js tokens — GitHub Light */
+  --hl-comment: #6e7781;
+  --hl-keyword: #cf222e;
+  --hl-string: #0a3069;
+  --hl-number: #0550ae;
+  --hl-builtin: #8250df;
+  --hl-function: #8250df;
+  --hl-variable: #953800;
+  --hl-type: #953800;
+  --hl-meta: #6e7781;
+  --hl-tag: #116329;
+  --hl-symbol: #0550ae;
+  --hl-attr: #0550ae;
+  --hl-deletion-bg: #ffebe9;
+  --hl-deletion-fg: #82071e;
+  --hl-addition-bg: #dafbe1;
+  --hl-addition-fg: #116329;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --code-bg: #161b22;
+  --code-border: #30363d;
+  --code-fg: #e6edf3;
+
+  --hl-comment: #8b949e;
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-number: #79c0ff;
+  --hl-builtin: #d2a8ff;
+  --hl-function: #d2a8ff;
+  --hl-variable: #ffa657;
+  --hl-type: #ffa657;
+  --hl-meta: #8b949e;
+  --hl-tag: #7ee787;
+  --hl-symbol: #79c0ff;
+  --hl-attr: #79c0ff;
+  --hl-deletion-bg: #67060c;
+  --hl-deletion-fg: #ffdcd7;
+  --hl-addition-bg: #033a16;
+  --hl-addition-fg: #aff5b4;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Inter",
+    "Segoe UI",
+    system-ui,
+    sans-serif;
+  font-feature-settings: "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.cm-editor {
+  height: 100%;
+  font-family:
+    "JetBrains Mono",
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
+  font-size: 14px;
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.cm-scroller {
+  font-family: inherit;
+}
+
+/* Tone down the active-line highlight so it doesn't compete with search hits */
+.cm-editor .cm-activeLine {
+  background-color: rgba(0, 0, 0, 0.025) !important;
+}
+.cm-editor .cm-activeLineGutter {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+[data-theme="dark"] .cm-editor .cm-activeLine {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+[data-theme="dark"] .cm-editor .cm-activeLineGutter {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Search highlights: yellow for all matches, orange for the current one */
+.cm-editor .cm-searchMatch {
+  background-color: rgba(255, 213, 0, 0.42) !important;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(220, 170, 0, 0.55);
+}
+.cm-editor .cm-searchMatch-selected {
+  background-color: rgba(255, 138, 0, 0.65) !important;
+  box-shadow: 0 0 0 1px rgba(210, 100, 0, 0.85);
+}
+[data-theme="dark"] .cm-editor .cm-searchMatch {
+  background-color: rgba(255, 220, 0, 0.28) !important;
+  box-shadow: 0 0 0 1px rgba(255, 200, 0, 0.4);
+}
+[data-theme="dark"] .cm-editor .cm-searchMatch-selected {
+  background-color: rgba(255, 145, 0, 0.55) !important;
+  box-shadow: 0 0 0 1px rgba(255, 170, 0, 0.7);
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* ============================================================
+ * Markdown preview — code blocks
+ * ============================================================ */
+
+.prose pre.hljs,
+.prose pre {
+  background-color: var(--code-bg) !important;
+  color: var(--code-fg) !important;
+  border: 1px solid var(--code-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family:
+    "JetBrains Mono",
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.prose pre code,
+.prose pre.hljs code {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* Strip prose's default `` quote marks around inline code */
+.prose :where(code):not(:where([class~="hljs"] *))::before,
+.prose :where(code):not(:where([class~="hljs"] *))::after {
+  content: "" !important;
+}
+
+.prose :not(pre) > code {
+  background-color: var(--code-bg);
+  color: var(--code-fg);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.88em;
+}
+
+/* ============================================================
+ * highlight.js token theme (GitHub Light / Dark via vars)
+ * ============================================================ */
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-doctag {
+  color: var(--hl-keyword);
+}
+
+.hljs-string,
+.hljs-template-string,
+.hljs-regexp,
+.hljs-meta-string {
+  color: var(--hl-string);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--hl-number);
+}
+
+.hljs-built_in,
+.hljs-class .hljs-title,
+.hljs-title.class_ {
+  color: var(--hl-builtin);
+}
+
+.hljs-function .hljs-title,
+.hljs-title.function_ {
+  color: var(--hl-function);
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-attr {
+  color: var(--hl-attr);
+}
+
+.hljs-type,
+.hljs-params {
+  color: var(--hl-type);
+}
+
+.hljs-meta,
+.hljs-meta .hljs-keyword {
+  color: var(--hl-meta);
+}
+
+.hljs-tag,
+.hljs-name {
+  color: var(--hl-tag);
+}
+
+.hljs-attribute {
+  color: var(--hl-attr);
+}
+
+.hljs-deletion {
+  background-color: var(--hl-deletion-bg);
+  color: var(--hl-deletion-fg);
+}
+
+.hljs-addition {
+  background-color: var(--hl-addition-bg);
+  color: var(--hl-addition-fg);
+}
+
+.hljs-strong {
+  font-weight: 600;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
