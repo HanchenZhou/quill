@@ -5,12 +5,25 @@ export const ipc = {
   openFileDialog: (): Promise<string | null> => window.quill.dialog.openFile(),
   saveFileDialog: (defaultName?: string): Promise<string | null> =>
     window.quill.dialog.saveFile(defaultName),
+  confirmOpenChoice: (args: {
+    candidateName: string
+    currentName: string
+    dirty: boolean
+  }): Promise<'new' | 'current' | 'cancel'> =>
+    window.quill.dialog.confirmOpenChoice(args),
+  openInNewWindow: (args: {
+    filePath?: string
+    folderPath?: string
+    newFile?: boolean
+  }): Promise<void> => window.quill.app.openInNewWindow(args),
   readFile: (path: string): Promise<string> => window.quill.fs.readFile(path),
   writeFile: (path: string, content: string): Promise<void> =>
     window.quill.fs.writeFile(path, content),
   listDir: (path: string): Promise<FileNode[]> => window.quill.fs.listDir(path),
   onOpenFile: (cb: (path: string) => void): (() => void) =>
     window.quill.events.onOpenFile(cb),
+  onOpenFolder: (cb: (path: string) => void): (() => void) =>
+    window.quill.events.onOpenFolder(cb),
   onMenu: (cb: (cmd: MenuCommand) => void): (() => void) =>
     window.quill.events.onMenuCommand(cb),
   exportPdf: (args: { html: string; defaultName: string }): Promise<string | null> =>

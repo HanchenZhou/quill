@@ -5,7 +5,7 @@ import { useApp } from '../state/app'
 const MD_EXT = /\.(md|markdown|mdown|mkd)$/i
 
 export function DragOverlay() {
-  const { openFileAt, openFolderAt } = useApp()
+  const { openPathWithPrompt } = useApp()
   const [over, setOver] = useState(false)
 
   useEffect(() => {
@@ -42,11 +42,11 @@ export function DragOverlay() {
         try {
           const stat = await window.quill.fs.stat(path)
           if (stat.isDirectory) {
-            await openFolderAt(path)
+            await openPathWithPrompt({ folderPath: path })
             return
           }
           if (stat.isFile && MD_EXT.test(path)) {
-            await openFileAt(path)
+            await openPathWithPrompt({ filePath: path })
             return
           }
         } catch {
@@ -65,7 +65,7 @@ export function DragOverlay() {
       window.removeEventListener('dragleave', onDragLeave)
       window.removeEventListener('drop', onDrop)
     }
-  }, [openFileAt, openFolderAt])
+  }, [openPathWithPrompt])
 
   if (!over) return null
 

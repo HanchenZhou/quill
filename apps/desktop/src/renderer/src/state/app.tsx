@@ -143,7 +143,14 @@ type Ctx = {
   openFile: () => Promise<void>
   openFolderAt: (path: string) => Promise<void>
   openFileAt: (path: string) => Promise<void>
-  newFile: () => void
+  /** Open or new-file via user gesture — prompts for new-vs-current window
+   *  when something is already open. */
+  openPathWithPrompt: (target: {
+    filePath?: string
+    folderPath?: string
+    newFile?: boolean
+  }) => Promise<void>
+  newFile: () => Promise<void>
   closeWorkspace: () => void
   setBuffer: (buffer: string) => void
   save: () => Promise<void>
@@ -173,19 +180,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addRecent({ type: 'file', path, name })
   }, [])
 
+  // Direct mutation of the current window's state — used by sidebar tree
+  // clicks and by main-process-initiated initial actions (no prompt).
+  const newFileInCurrent = useCallback(() => {
+    dispatch({ type: 'NEW_FILE' })
+  }, [])
+
+  const openPathWithPrompt = useCallback(
+    async (target: { filePath?: string; folderPath?: string; newFile?: boolean }) => {
+      const cur = stateRef.current.currentFile
+      // Empty state: just apply, no prompt.
+      if (!cur) {
+        if (target.filePath) return openFileAt(target.filePath)
+        if (target.folderPath) return openFolderAt(target.folderPath)
+        if (target.newFile) return newFileInCurrent()
+        return
+      }
+      const candidateName = target.filePath
+        ? (target.filePath.split(/[/\\]/).pop() ?? '文件')
+        : target.folderPath
+          ? (target.folderPath.split(/[/\\]/).pop() ?? '文件夹')
+          : '未命名'
+      const currentName = cur.path
+        ? (cur.path.split(/[/\\]/).pop() ?? '未命名')
+        : 'Untitled'
+      const choice = await ipc.confirmOpenChoice({
+        candidateName,
+        currentName,
+        dirty: isDirty(stateRef.current)
+      })
+      if (choice === 'cancel') return
+      if (choice === 'new') {
+        await ipc.openInNewWindow(target)
+        return
+      }
+      // current
+      if (target.filePath) await openFileAt(target.filePath)
+      else if (target.folderPath) await openFolderAt(target.folderPath)
+      else if (target.newFile) newFileInCurrent()
+    },
+    [openFileAt, openFolderAt, newFileInCurrent]
+  )
+
   const openFolder = useCallback(async () => {
     const p = await ipc.openFolderDialog()
-    if (p) await openFolderAt(p)
-  }, [openFolderAt])
+    if (p) await openPathWithPrompt({ folderPath: p })
+  }, [openPathWithPrompt])
 
   const openFile = useCallback(async () => {
     const p = await ipc.openFileDialog()
-    if (p) await openFileAt(p)
-  }, [openFileAt])
+    if (p) await openPathWithPrompt({ filePath: p })
+  }, [openPathWithPrompt])
 
-  const newFile = useCallback(() => {
-    dispatch({ type: 'NEW_FILE' })
-  }, [])
+  const newFile = useCallback(async () => {
+    await openPathWithPrompt({ newFile: true })
+  }, [openPathWithPrompt])
 
   const closeWorkspace = useCallback(() => dispatch({ type: 'CLOSE_WORKSPACE' }), [])
 
@@ -242,17 +291,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (cmd === 'open-folder') void openFolder()
       else if (cmd === 'open-file') void openFile()
       else if (cmd === 'save') void save()
-      else if (cmd === 'new-file') newFile()
+      else if (cmd === 'new-file') void newFile()
       else if (cmd === 'close-folder') closeWorkspace()
     })
   }, [openFolder, openFile, save, newFile, closeWorkspace])
 
-  // Wire Finder open-file event
+  // Wire main → renderer open-file event (Finder "Open With" + new windows
+  // bootstrapped by main with an `initial: open-file` action). The window
+  // that receives this event was created for the file, so always apply
+  // directly without prompting.
   useEffect(() => {
     return ipc.onOpenFile((path) => {
       void openFileAt(path)
     })
   }, [openFileAt])
+
+  // Same for folder — fires when main creates a new window with an
+  // `initial: open-folder` action.
+  useEffect(() => {
+    return ipc.onOpenFolder((path) => {
+      void openFolderAt(path)
+    })
+  }, [openFolderAt])
 
   const value = useMemo<Ctx>(
     () => ({
@@ -263,6 +323,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openFile,
       openFolderAt,
       openFileAt,
+      openPathWithPrompt,
       newFile,
       closeWorkspace,
       setBuffer,
@@ -277,6 +338,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openFile,
       openFolderAt,
       openFileAt,
+      openPathWithPrompt,
       newFile,
       closeWorkspace,
       setBuffer,

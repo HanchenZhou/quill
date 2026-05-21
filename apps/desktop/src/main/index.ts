@@ -1,94 +1,44 @@
-import { app, BrowserWindow, shell } from 'electron'
-import { join } from 'node:path'
+import { app } from 'electron'
 import { registerIpc } from './ipc'
 import { buildMenu } from './menu'
+import { createWindow, windows } from './windows'
 
-const isDev = !!process.env.ELECTRON_RENDERER_URL
+// Paths queued during cold start before app is ready — Finder sends `open-file`
+// before `whenReady` fires. Drained in whenReady().
+const pendingOpenAtStartup: string[] = []
 
-let mainWindow: BrowserWindow | null = null
-const pendingOpenFiles: string[] = []
-
-function flushPendingOpenFiles(): void {
-  if (!mainWindow) return
-  while (pendingOpenFiles.length) {
-    const p = pendingOpenFiles.shift()!
-    mainWindow.webContents.send('quill:open-file', p)
-  }
-}
-
-function createWindow(): void {
-  mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 720,
-    minHeight: 480,
-    show: false,
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  })
-
-  mainWindow.on('ready-to-show', () => {
-    mainWindow?.show()
-  })
-
-  mainWindow.on('closed', () => {
-    mainWindow = null
-  })
-
-  mainWindow.webContents.on('did-finish-load', () => {
-    flushPendingOpenFiles()
-  })
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
-
-  if (isDev && process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
-}
-
+// Finder "Open With" / drop-on-dock / double-click .md → always spawn a fresh
+// window so the user's existing work isn't disturbed.
 app.on('open-file', (event, path) => {
   event.preventDefault()
-  pendingOpenFiles.push(path)
-
-  // Cold start: app.whenReady() will call createWindow() and the queue flushes
-  // on did-finish-load.
-  if (!app.isReady()) return
-
-  // Window was closed but app is still running (macOS dock behaviour). Spin a
-  // new window; its did-finish-load will drain the queue.
-  if (!mainWindow) {
-    createWindow()
+  if (!app.isReady()) {
+    pendingOpenAtStartup.push(path)
     return
   }
-
-  // Window exists but renderer hasn't loaded yet — same flush path covers it.
-  if (mainWindow.webContents.isLoading()) return
-
-  flushPendingOpenFiles()
-  if (mainWindow.isMinimized()) mainWindow.restore()
-  mainWindow.focus()
+  createWindow({ initial: { type: 'open-file', path } })
 })
 
 app.whenReady().then(() => {
   registerIpc()
   buildMenu()
-  createWindow()
+
+  if (pendingOpenAtStartup.length > 0) {
+    for (const path of pendingOpenAtStartup) {
+      createWindow({ initial: { type: 'open-file', path } })
+    }
+    pendingOpenAtStartup.length = 0
+  } else {
+    createWindow()
+  }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (windows.size === 0) createWindow()
   })
 })
 
+// Quit on all platforms when the last window closes. Per project UX: a
+// markdown editor that lingers in the dock with no windows is heavier than
+// useful.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  app.quit()
 })

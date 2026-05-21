@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs'
 import { extname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { createWindow, type InitialAction } from './windows'
 
 export type FileNode = {
   name: string
@@ -110,6 +111,49 @@ export function registerIpc(): void {
       mtime: s.mtimeMs
     }
   })
+
+  ipcMain.handle(
+    'app:openInNewWindow',
+    async (
+      _evt,
+      args: { filePath?: string; folderPath?: string; newFile?: boolean }
+    ) => {
+      let initial: InitialAction | undefined
+      if (args.filePath) initial = { type: 'open-file', path: args.filePath }
+      else if (args.folderPath) initial = { type: 'open-folder', path: args.folderPath }
+      else if (args.newFile) initial = { type: 'new-file' }
+      createWindow({ initial })
+    }
+  )
+
+  ipcMain.handle(
+    'dialog:confirmOpenChoice',
+    async (
+      evt,
+      args: { candidateName: string; currentName: string; dirty: boolean }
+    ): Promise<'new' | 'current' | 'cancel'> => {
+      const { candidateName, currentName, dirty } = args
+      const senderWin = BrowserWindow.fromWebContents(evt.sender) ?? undefined
+      const buttons = dirty
+        ? ['新窗口', '替换（丢失未保存改动）', '取消']
+        : ['新窗口', '在当前窗口打开', '取消']
+      const detail = dirty
+        ? `当前文件「${currentName}」有未保存的改动。\n选择"替换"会直接丢弃这些改动。`
+        : `当前打开：${currentName}`
+      const result = await dialog.showMessageBox(senderWin!, {
+        type: dirty ? 'warning' : 'question',
+        buttons,
+        defaultId: 0,
+        cancelId: 2,
+        message: `在哪里打开 ${candidateName}？`,
+        detail,
+        noLink: true
+      })
+      if (result.response === 0) return 'new'
+      if (result.response === 1) return 'current'
+      return 'cancel'
+    }
+  )
 
   ipcMain.handle(
     'export:pdf',
