@@ -1,11 +1,11 @@
 ---
 name: tdd
-description: Use when implementing new features, fixing bugs, or doing behavior-changing refactors in Atlas. Enforces test-driven development: write a failing test first, make it pass, then refactor. Trigger on any change to logic in apps/ or packages/. Skip for pure docs, config, CI, dependency bumps, or typo fixes.
+description: Use when implementing new features, fixing bugs, or doing behavior-changing refactors in Quill. Enforces test-driven development: write a failing test first, make it pass, then refactor. Trigger on any change to logic in apps/ or packages/. Skip for pure docs, config, CI, dependency bumps, or typo fixes.
 ---
 
 # TDD（测试驱动开发）
 
-Atlas 默认 TDD：**测试先于实现**。新功能 / bug 修复 / 行为变更的重构都遵循红-绿-重构循环。
+Quill 默认 TDD：**测试先于实现**。新功能 / bug 修复 / 行为变更的重构都遵循红-绿-重构循环。
 
 ## 何时遵守
 

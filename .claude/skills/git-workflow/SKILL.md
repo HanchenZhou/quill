@@ -1,9 +1,9 @@
 ---
 name: git-workflow
-description: Use when creating commits, pushes, GitHub PRs, or issues for the Atlas project. Enforces Conventional Commits, PR/issue message templates, and gh CLI usage. Trigger any git/gh operation that produces a message (commit, PR title/body, issue body, comment) or modifies repo state.
+description: Use when creating commits, pushes, GitHub PRs, or issues for the Quill project. Enforces Conventional Commits, PR/issue message templates, and gh CLI usage. Trigger any git/gh operation that produces a message (commit, PR title/body, issue body, comment) or modifies repo state.
 ---
 
-# Atlas Git Workflow
+# Quill Git Workflow
 
 所有 GitHub 相关动作走 `gh` CLI；commit / push / branch 等本地操作用 `git`。
 
@@ -136,17 +136,20 @@ EOF
 
 ### scope（可选，小写）
 
-Atlas 当前合法 scope（按 `apps/` 和模块边界）：
+Quill 当前合法 scope（按 `apps/` 和模块边界）：
 
-- `daemon` — `apps/daemon/`
+- `desktop` — `apps/desktop/`（Electron 桌面端）
+- `main` — `apps/desktop/src/main/`（主进程）
+- `preload` — `apps/desktop/src/preload/`
+- `renderer` — `apps/desktop/src/renderer/`（React UI）
+- `editor` — CodeMirror 6 集成、查找替换
+- `preview` — markdown-it 渲染、高亮、prose 样式
+- `export` — PDF / 其他格式导出
 - `web` — `apps/web/`（暂未落地）
-- `desktop` — `apps/desktop/`（暂缓）
-- `shared` — `packages/shared/`
-- `agent` — Agent Loop / Tool Registry
-- `rag` — RAG / Retrieve
-- `ingest` — Ingest Pipeline
+- `shared` — `packages/*`（共享代码，目前未落地）
 - `docs` — `docs/` 文档
-- `repo` — 根级配置（package.json / turbo.json / tsconfig）
+- `repo` — 根级配置（package.json / tsconfig.base.json / electron-builder.yml / .gitignore 等）
+- `build` — 打包、图标生成、CI 相关
 
 新增模块时同步扩展此表。
 
@@ -169,7 +172,7 @@ Atlas 当前合法 scope（按 `apps/` 和模块边界）：
 
 ### ❌ 不要加 Co-Authored-By trailer
 
-**Atlas 项目特例**：commit message 里**不**加 `Co-Authored-By: Claude ...` 行。
+**Quill 项目约定**：commit message 里**不**加 `Co-Authored-By: Claude ...` 行。
 
 理由：GitHub 把 trailer 渲染成共同作者并排显示，会让 commit 看起来像 Claude 主导而不是用户主导。归属信息不需要写进 commit 历史。
 
