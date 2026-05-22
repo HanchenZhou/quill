@@ -660,33 +660,45 @@ export function AgentPanel({ onClose }: Props) {
 
   const handlePlanExecute = useCallback(async (): Promise<void> => {
     if (!runId) return
-    // Snapshot the awaiting plan + its current enabled[] selection, build
-    // the edited plan, and tell main to resume into Build with it.
-    let edited: { steps: PlanStep[] } | null = null
-    setItems((prev) => {
-      const idx = prev.findIndex((it) => it.kind === 'plan' && it.status === 'awaiting')
-      if (idx === -1) return prev
-      const card = prev[idx] as Extract<Item, { kind: 'plan' }>
-      const enabled = card.enabled ?? card.steps.map(() => true)
-      const filtered = card.steps.filter((_, i) => enabled[i])
-      // Need at least one step — if user unchecked all, treat as dismiss.
-      if (filtered.length === 0) {
-        return prev.map((it, i) =>
-          i === idx ? ({ ...card, status: 'dismissed' as const } as Item) : it
+    // Compute the edited plan BEFORE setItems. In React 18 the updater
+    // passed to setItems runs during the next render — mutating an outer
+    // variable from inside the updater and reading it on the next line
+    // (the old pattern) always sees `null`, so the dismiss path used to
+    // be taken even when the user clicked Execute. itemsRef gives us
+    // the latest items[] synchronously here.
+    const snapshot = itemsRef.current
+    const idx = snapshot.findIndex(
+      (it) => it.kind === 'plan' && it.status === 'awaiting'
+    )
+    if (idx === -1) return
+    const card = snapshot[idx] as Extract<Item, { kind: 'plan' }>
+    const enabled = card.enabled ?? card.steps.map(() => true)
+    const filtered = card.steps.filter((_, i) => enabled[i])
+
+    if (filtered.length === 0) {
+      // No steps enabled → treat as dismiss.
+      setItems((prev) =>
+        prev.map((it) =>
+          it.kind === 'plan' && it.status === 'awaiting'
+            ? ({ ...it, status: 'dismissed' as const } as Item)
+            : it
         )
-      }
-      edited = { steps: filtered }
-      return prev.map((it, i) =>
-        i === idx ? ({ ...card, status: 'complete' as const } as Item) : it
       )
-    })
-    if (!edited) {
       await ipc.agent.respondPlanApproval({ runId, response: { approved: false } })
       return
     }
+
+    // Optimistic UI update — flip the card to 'complete' immediately.
+    setItems((prev) =>
+      prev.map((it) =>
+        it.kind === 'plan' && it.status === 'awaiting'
+          ? ({ ...it, status: 'complete' as const } as Item)
+          : it
+      )
+    )
     await ipc.agent.respondPlanApproval({
       runId,
-      response: { approved: true, plan: edited }
+      response: { approved: true, plan: { steps: filtered } }
     })
   }, [runId])
 
@@ -722,6 +734,15 @@ export function AgentPanel({ onClose }: Props) {
     },
     [runId]
   )
+
+  // Mirror items[] in a ref so handlers (handlePlanExecute, etc.) can
+  // read the latest snapshot synchronously without putting `items` in
+  // their useCallback deps (which would re-create the callbacks on every
+  // panel event and churn child re-renders).
+  const itemsRef = useRef<Item[]>(items)
+  useEffect(() => {
+    itemsRef.current = items
+  }, [items])
 
   // Cancel the active run if the panel unmounts (user closes it mid-run) so
   // the main process doesn't leak agent loops awaiting approval forever.
