@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",
+    "@quill/agent": "workspace:*",
     "@quill/shared-types": "workspace:*",
     "@quill/vault-adapter": "workspace:*",
     "@ai-sdk/openai": "^3.0.65",

@@ -11,25 +11,28 @@ import {
   removeProvider,
   testProvider,
   getDefaultProvider,
-  setDefaultProvider
+  setDefaultProvider,
+  getProviderKey
 } from './providers'
-import {
-  runAgent,
-  runCompression,
-  cancelRun,
-  respondApproval,
-  respondPlanApproval,
-  type AgentRunArgs,
-  type AgentEvent,
-  type ApprovalResponse,
-  type CompressionRunArgs,
-  type PlanApprovalResponse,
-  type Scope
-} from './agent'
-import { createContextStore } from './agent/context'
+import { AgentRuntime, createContextStore, type CredentialProvider } from '@quill/agent'
+import type {
+  AgentEvent,
+  AgentRunArgs,
+  ApprovalResponse,
+  CompressionRunArgs,
+  PlanApprovalResponse,
+  Scope
+} from '@quill/shared-types'
 
 const CONTEXTS_DIR = join(homedir(), '.quill', 'contexts')
 const contextStore = createContextStore(CONTEXTS_DIR)
+
+// Desktop credential strategy: read from the electron safeStorage-backed
+// keychain. Server will inject a config.yaml-backed implementation instead.
+const credentials: CredentialProvider = {
+  getKey: (providerId) => getProviderKey(providerId)
+}
+const agent = new AgentRuntime({ credentials })
 
 export type FileNode = {
   name: string
@@ -214,19 +217,19 @@ export function registerIpc(): void {
     async (evt, args: { runId: string } & AgentRunArgs) => {
       const { runId, ...runArgs } = args
       const sender = evt.sender
-      await runAgent(runId, runArgs, (event: AgentEvent) => {
+      await agent.runAgent(runId, runArgs, (event: AgentEvent) => {
         if (sender.isDestroyed()) return
         sender.send('agent:event', { runId, event })
       })
     }
   )
-  ipcMain.handle('agent:cancel', async (_evt, runId: string) => cancelRun(runId))
+  ipcMain.handle('agent:cancel', async (_evt, runId: string) => agent.cancelRun(runId))
   ipcMain.handle(
     'agent:compress',
     async (evt, args: { runId: string } & CompressionRunArgs) => {
       const { runId, ...rest } = args
       const sender = evt.sender
-      await runCompression(runId, rest, (event: AgentEvent) => {
+      await agent.runCompression(runId, rest, (event: AgentEvent) => {
         if (sender.isDestroyed()) return
         sender.send('agent:event', { runId, event })
       })
@@ -245,12 +248,12 @@ export function registerIpc(): void {
     async (
       _evt,
       args: { runId: string; toolCallId: string; response: ApprovalResponse }
-    ) => respondApproval(args.runId, args.toolCallId, args.response)
+    ) => agent.respondApproval(args.runId, args.toolCallId, args.response)
   )
   ipcMain.handle(
     'agent:plan-approval-respond',
     async (_evt, args: { runId: string; response: PlanApprovalResponse }) =>
-      respondPlanApproval(args.runId, args.response)
+      agent.respondPlanApproval(args.runId, args.response)
   )
 
   ipcMain.handle(

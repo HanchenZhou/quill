@@ -1,7 +1,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { LanguageModel } from 'ai'
-import { getProviderKey } from '../providers'
+import type { CredentialProvider } from './credentials'
 
 type ProviderKind = 'anthropic' | 'openai-compatible'
 
@@ -74,18 +74,21 @@ export function migrateModelId(providerId: string, storedModel: string): string 
 }
 
 /**
- * Build an ai-sdk LanguageModel for the given providerId + modelId. Decrypts
- * the stored API key on demand — main process only.
+ * Build an ai-sdk LanguageModel for the given providerId + modelId. Resolves
+ * the stored API key via the injected CredentialProvider so this module
+ * stays portable across desktop (electron safeStorage) and server (config
+ * file) deployments.
  */
 export async function makeModel(
   providerId: string,
-  modelId: string
+  modelId: string,
+  credentials: CredentialProvider
 ): Promise<LanguageModel> {
   const profile = PROFILES[providerId]
   if (!profile) {
     throw new Error(`unknown provider: ${providerId}`)
   }
-  const key = await getProviderKey(providerId)
+  const key = await credentials.getKey(providerId)
   if (!key) {
     throw new Error(`provider "${providerId}" not configured — set API key in Settings`)
   }
