@@ -1,4 +1,4 @@
-import type { FileNode, MenuCommand } from '../types'
+import type { AgentEvent, AgentRunArgs, FileNode, MenuCommand } from '../types'
 
 export const ipc = {
   openFolderDialog: (): Promise<string | null> => window.quill.dialog.openFolder(),
@@ -35,6 +35,13 @@ export const ipc = {
   exportPdf: (args: { html: string; defaultName: string }): Promise<string | null> =>
     window.quill.exportPdf(args),
   revealInFolder: (path: string): Promise<void> => window.quill.shell.reveal(path),
+  agent: {
+    run: (args: { runId: string } & AgentRunArgs): Promise<void> =>
+      window.quill.agent.run(args),
+    cancel: (runId: string): Promise<boolean> => window.quill.agent.cancel(runId),
+    onEvent: (cb: (payload: { runId: string; event: AgentEvent }) => void) =>
+      window.quill.agent.onEvent(cb)
+  },
   providers: {
     list: () => window.quill.providers.list(),
     upsert: (args: { id: string; key: string; model: string }) =>

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { AppProvider, useApp } from './state/app'
 import { ThemeProvider } from './state/theme'
 import { PrefsProvider } from './state/prefs'
@@ -7,16 +7,21 @@ import { RightPane } from './components/RightPane'
 import { EmptyState } from './components/EmptyState'
 import { StatusBar } from './components/StatusBar'
 import { DragOverlay } from './components/DragOverlay'
+import { AgentPanel } from './components/AgentPanel'
 
 function Shell() {
   const { state, mode, save } = useApp()
+  const [agentOpen, setAgentOpen] = useState(false)
 
-  // Cmd+S to save (in renderer; menu also fires this)
+  // Cmd+S save, Cmd+J toggle agent panel
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
         void save()
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
+        e.preventDefault()
+        setAgentOpen((v) => !v)
       }
     }
     window.addEventListener('keydown', handler)
@@ -34,6 +39,7 @@ function Shell() {
         {mode === 'empty' && <EmptyState />}
         {mode === 'workspace' && !state.sidebarCollapsed && <Sidebar />}
         {(mode === 'workspace' || mode === 'single') && <RightPane />}
+        {agentOpen && <AgentPanel onClose={() => setAgentOpen(false)} />}
       </div>
 
       <StatusBar />
