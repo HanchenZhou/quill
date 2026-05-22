@@ -1,13 +1,19 @@
+import { LocalProvider, type VaultProvider } from '@quill/vault-adapter'
 import type {
   AgentEvent,
   AgentRunArgs,
   ApprovalResponse,
   CompressionRunArgs,
-  FileNode,
   MenuCommand,
   PlanApprovalResponse,
   Scope
 } from '../types'
+
+// Renderer-side vault is local-by-default today. RemoteProvider takes over
+// when remote-mode is selected (planned, see docs/web-server.md).
+// Lazy-constructed via a getter so module load doesn't touch `window` —
+// keeps the module importable from bun:test where DOM globals are absent.
+let _vault: VaultProvider | undefined
 
 export const ipc = {
   openFolderDialog: (): Promise<string | null> => window.quill.dialog.openFolder(),
@@ -29,12 +35,10 @@ export const ipc = {
   }): Promise<void> => window.quill.app.openInNewWindow(args),
   openSettingsWindow: (): Promise<void> => window.quill.app.openSettings(),
   getAppVersion: (): Promise<string> => window.quill.app.version(),
-  readFile: (path: string): Promise<string> => window.quill.fs.readFile(path),
-  writeFile: (path: string, content: string): Promise<void> =>
-    window.quill.fs.writeFile(path, content),
-  renameFile: (oldPath: string, newPath: string): Promise<void> =>
-    window.quill.fs.rename(oldPath, newPath),
-  listDir: (path: string): Promise<FileNode[]> => window.quill.fs.listDir(path),
+  get vault(): VaultProvider {
+    if (!_vault) _vault = new LocalProvider(window.quill.fs)
+    return _vault
+  },
   onOpenFile: (cb: (path: string) => void): (() => void) =>
     window.quill.events.onOpenFile(cb),
   onOpenFolder: (cb: (path: string) => void): (() => void) =>

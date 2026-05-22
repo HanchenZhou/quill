@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Upload } from 'lucide-react'
+import { ipc } from '../lib/ipc'
 import { useApp } from '../state/app'
 
 const MD_EXT = /\.(md|markdown|mdown|mkd)$/i
@@ -40,7 +41,7 @@ export function DragOverlay() {
         const path = (f as File & { path?: string }).path
         if (!path) continue
         try {
-          const stat = await window.quill.fs.stat(path)
+          const stat = await ipc.vault.stat(path)
           if (stat.isDirectory) {
             await openPathWithPrompt({ folderPath: path })
             return
