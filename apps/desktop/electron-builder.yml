@@ -29,9 +29,12 @@ fileAssociations:
 mac:
   icon: build/icon.icns
   category: public.app-category.productivity
-  # No Apple Developer cert configured — produce an ad-hoc-signed build that
-  # runs locally (user may need to right-click → Open the first time).
-  identity: null
+  # No Apple Developer cert configured. `'-'` = ad-hoc signing (codesign
+  # --sign -). On Apple Silicon every binary MUST carry at least an
+  # ephemeral signature or macOS rejects launch with "Quill is damaged".
+  # With ad-hoc, first-launch still warns ("unidentified developer"), but
+  # the user can right-click → Open / accept via System Settings.
+  identity: '-'
   target:
     - target: dmg
       arch:
