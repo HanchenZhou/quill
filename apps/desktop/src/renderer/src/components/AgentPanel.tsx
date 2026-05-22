@@ -33,6 +33,7 @@ import {
 } from '../lib/availableModels'
 import { shouldCompress, splitForCompression } from '../lib/compressionTrigger'
 import { getProviderModel } from '../lib/providers'
+import { Select } from './Select'
 import type {
   AgentEvent,
   AgentMode,
@@ -1567,19 +1568,27 @@ function ModelPickerPopover({
       </div>
     )
   }
-  const value = (c: ModelChoice | null): string =>
-    c ? serializeModelChoice(c) : ''
+  const value = (c: ModelChoice | null): string => (c ? serializeModelChoice(c) : '')
   const onChange =
     (set: (c: ModelChoice | null) => void) =>
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      const v = e.target.value
+    (v: string): void => {
       if (!v) set(null)
       else set(parseModelChoice(v))
     }
   return (
     <div className="px-3 pb-3 pt-1 space-y-2 border-t border-[var(--rule-soft)]">
-      <PickerRow label="Plan" value={value(plan)} onChange={onChange(onSelectPlan)} models={availableModels} />
-      <PickerRow label="Build" value={value(build)} onChange={onChange(onSelectBuild)} models={availableModels} />
+      <PickerRow
+        label="Plan"
+        value={value(plan)}
+        onChange={onChange(onSelectPlan)}
+        models={availableModels}
+      />
+      <PickerRow
+        label="Build"
+        value={value(build)}
+        onChange={onChange(onSelectBuild)}
+        models={availableModels}
+      />
       <div className="font-serif-zh italic text-[10px] text-[var(--ink-faint)]">
         留空 = 跟随设置里的默认 provider
       </div>
@@ -1595,24 +1604,23 @@ function PickerRow({
 }: {
   label: string
   value: string
-  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
+  onChange: (value: string) => void
   models: AvailableModel[]
 }) {
+  const options = [
+    { value: '', label: '默认 (跟随设置)' },
+    ...models.map((m) => ({
+      value: `${m.providerId}/${m.modelId}`,
+      label: `${m.providerName} · ${m.modelId}`,
+      hint: formatContext(m.contextTokens)
+    }))
+  ]
   return (
     <div className="flex items-center gap-2">
       <span className="w-10 shrink-0 text-[11px] text-[var(--ink-soft)]">{label}</span>
-      <select
-        value={value}
-        onChange={onChange}
-        className="flex-1 px-2 py-1 rounded-md bg-[var(--paper)] text-[12px] font-mono text-[var(--ink)] border border-[var(--rule)] focus:outline-none focus:border-[var(--accent)]/50 cursor-pointer"
-      >
-        <option value="">默认 (跟随设置)</option>
-        {models.map((m) => (
-          <option key={`${m.providerId}/${m.modelId}`} value={`${m.providerId}/${m.modelId}`}>
-            {m.providerName} · {m.modelId} · {formatContext(m.contextTokens)}
-          </option>
-        ))}
-      </select>
+      <div className="flex-1 min-w-0">
+        <Select value={value} onChange={onChange} options={options} ariaLabel={`${label} 模型`} />
+      </div>
     </div>
   )
 }

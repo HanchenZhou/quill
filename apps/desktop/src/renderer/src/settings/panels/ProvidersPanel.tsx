@@ -7,6 +7,7 @@ import {
   type ProviderProfile,
   type ProviderId
 } from '../../lib/providers'
+import { Select } from '../../components/Select'
 
 /** Compact context display: 262144 → "262K", 1_000_000 → "1.0M". */
 function formatContext(tokens: number): string {
@@ -306,20 +307,19 @@ function ProviderModal({
           </Field>
 
           <Field label="Model">
-            <select
+            <Select
               value={model}
-              onChange={(e) => {
-                setModel(e.target.value)
+              onChange={(v) => {
+                setModel(v)
                 if (error) setError(null)
               }}
-              className="w-full px-3 py-1.5 rounded-md bg-[var(--paper)] text-[13px] font-mono text-[var(--ink)] border border-[var(--rule)] focus:outline-none focus:border-[var(--accent)]/50 cursor-pointer"
-            >
-              {provider.models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label ?? m.id} · {formatContext(m.contextTokens)}
-                </option>
-              ))}
-            </select>
+              options={provider.models.map((m) => ({
+                value: m.id,
+                label: m.label ?? m.id,
+                hint: formatContext(m.contextTokens)
+              }))}
+              ariaLabel="选择模型"
+            />
           </Field>
 
           {error && (
