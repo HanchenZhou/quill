@@ -1,9 +1,15 @@
 import { useMemo } from 'react'
+import { Sparkles } from 'lucide-react'
 import { useApp } from '../state/app'
 import { countWords } from '../lib/markdown'
 import { ThemeToggle } from './ThemeToggle'
 
-export function StatusBar() {
+type Props = {
+  agentOpen: boolean
+  onToggleAgent: () => void
+}
+
+export function StatusBar({ agentOpen, onToggleAgent }: Props) {
   const { state, mode, dirty } = useApp()
   const cur = state.currentFile
 
@@ -36,6 +42,18 @@ export function StatusBar() {
         </span>
       )}
       <div className="flex-1" />
+      <button
+        onClick={onToggleAgent}
+        title={agentOpen ? '关闭 Agent (⌘J)' : '打开 Agent (⌘J)'}
+        className={[
+          'no-drag p-1 rounded transition flex items-center justify-center',
+          agentOpen
+            ? 'text-[var(--accent)] bg-[var(--accent-soft)]/60'
+            : 'text-[var(--ink-faint)] hover:text-[var(--ink)] hover:bg-[var(--paper-soft)]'
+        ].join(' ')}
+      >
+        <Sparkles className="w-3.5 h-3.5" />
+      </button>
       <ThemeToggle />
     </footer>
   )
