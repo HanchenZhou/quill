@@ -15,12 +15,14 @@ import {
 } from './providers'
 import {
   runAgent,
+  runCompression,
   cancelRun,
   respondApproval,
   respondPlanApproval,
   type AgentRunArgs,
   type AgentEvent,
   type ApprovalResponse,
+  type CompressionRunArgs,
   type PlanApprovalResponse,
   type Scope
 } from './agent'
@@ -219,6 +221,17 @@ export function registerIpc(): void {
     }
   )
   ipcMain.handle('agent:cancel', async (_evt, runId: string) => cancelRun(runId))
+  ipcMain.handle(
+    'agent:compress',
+    async (evt, args: { runId: string } & CompressionRunArgs) => {
+      const { runId, ...rest } = args
+      const sender = evt.sender
+      await runCompression(runId, rest, (event: AgentEvent) => {
+        if (sender.isDestroyed()) return
+        sender.send('agent:event', { runId, event })
+      })
+    }
+  )
 
   ipcMain.handle('context:load', async (_evt, scope: Scope) => contextStore.load(scope))
   ipcMain.handle(

@@ -271,6 +271,40 @@ describe('itemsToMessages — approvals (write tools)', () => {
   })
 })
 
+describe('itemsToMessages — compressed-summary', () => {
+  it('emits one assistant message with a summary preamble', () => {
+    const items: ConvItem[] = [
+      {
+        kind: 'compressed-summary',
+        summary: '- read a.md\n- wrote b.md',
+        originalCount: 14
+      },
+      { kind: 'user', text: 'what next?' }
+    ]
+    const out = itemsToMessages(items)
+    expect(out[0]).toEqual({
+      role: 'assistant',
+      content: expect.stringContaining('Summary of earlier conversation')
+    })
+    expect(out[0].content).toContain('- read a.md')
+    expect(out[1]).toEqual({ role: 'user', content: 'what next?' })
+  })
+
+  it('treats a compressed summary at the head as a regular assistant turn for merging', () => {
+    // If an assistant-text item follows the summary, they should NOT merge
+    // (the summary is a complete prior turn; the new assistant-text is a
+    // new turn in some future conversation slice).
+    const items: ConvItem[] = [
+      { kind: 'compressed-summary', summary: 'old stuff', originalCount: 3 },
+      { kind: 'assistant-text', text: 'fresh reply' }
+    ]
+    const out = itemsToMessages(items)
+    expect(out.length).toBe(2)
+    expect(out[0].role).toBe('assistant')
+    expect(out[1].role).toBe('assistant')
+  })
+})
+
 describe('itemsToMessages — mixed sequences', () => {
   it('text + read tool + approved write in one assistant turn', () => {
     const items: ConvItem[] = [

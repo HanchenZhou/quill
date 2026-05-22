@@ -7,6 +7,7 @@ import { createApprovalsManager, type ApprovalPayload, type ApprovalResponse } f
 import { classifyIntent, type RouteDecision } from './router'
 import { streamPlan, type Plan } from './plan'
 import { createPlanApprovalsManager, type PlanApprovalResponse } from './plan-approvals'
+import { compressConversation } from './compress'
 
 export type { Scope } from './scope'
 export type { ApprovalPayload, ApprovalResponse } from './approvals'
@@ -80,6 +81,9 @@ export type AgentEvent =
   | { type: 'plan-complete'; plan: Plan }
   | { type: 'plan-usage'; usage: unknown }
   | { type: 'plan-approval-request'; plan: Plan }
+  | { type: 'compression-start' }
+  | { type: 'compression-complete'; summary: string; originalCount: number }
+  | { type: 'compression-error'; message: string }
   | { type: 'step-finish'; usage?: unknown }
   | { type: 'finish'; usage?: unknown; finishReason?: string }
   | { type: 'error'; message: string }
@@ -350,5 +354,88 @@ async function runBuildPhase(
         // Unhandled chunk type (reasoning, redacted, etc.) — skip silently
         break
     }
+  }
+}
+
+/**
+ * Run the compression agent. Takes the prior conversation messages the
+ * caller wants summarized + the model spec, returns the summary text.
+ * Side-channel emits `compression-start` / `compression-complete` /
+ * `compression-error` events so the UI can show a "压缩中…" indicator.
+ *
+ * Logged as structured JSON to stdout so a future log file or remote
+ * collector can pick it up later without code changes.
+ */
+export type CompressionRunArgs = {
+  providerId: string
+  modelId: string
+  messages: ModelMessage[]
+  originalCount: number
+  /** For logging only — what triggered the run. */
+  lastInputTokens?: number
+  contextTokens?: number
+}
+
+export async function runCompression(
+  runId: string,
+  args: CompressionRunArgs,
+  onEvent: (event: AgentEvent) => void
+): Promise<void> {
+  const controller = new AbortController()
+  runs.set(runId, controller)
+  const startedAt = Date.now()
+  // eslint-disable-next-line no-console
+  console.log(
+    JSON.stringify({
+      event: 'compression-start',
+      runId,
+      providerId: args.providerId,
+      modelId: args.modelId,
+      originalCount: args.originalCount,
+      lastInputTokens: args.lastInputTokens,
+      contextTokens: args.contextTokens
+    })
+  )
+  onEvent({ type: 'compression-start' })
+  try {
+    const model = await makeModel(args.providerId, args.modelId)
+    const { summary } = await compressConversation(
+      model,
+      args.messages,
+      controller.signal
+    )
+    onEvent({
+      type: 'compression-complete',
+      summary,
+      originalCount: args.originalCount
+    })
+    // eslint-disable-next-line no-console
+    console.log(
+      JSON.stringify({
+        event: 'compression-complete',
+        runId,
+        durationMs: Date.now() - startedAt,
+        summaryChars: summary.length
+      })
+    )
+  } catch (err) {
+    const message =
+      controller.signal.aborted
+        ? 'cancelled'
+        : err instanceof Error
+          ? err.message
+          : String(err)
+    onEvent({ type: 'compression-error', message })
+    // eslint-disable-next-line no-console
+    console.log(
+      JSON.stringify({
+        event: 'compression-error',
+        runId,
+        durationMs: Date.now() - startedAt,
+        error: message
+      })
+    )
+  } finally {
+    runs.delete(runId)
   }
 }
