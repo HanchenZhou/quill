@@ -13,7 +13,7 @@ type ProviderKind = 'anthropic' | 'openai-compatible'
 const PROFILES: Record<string, { kind: ProviderKind; baseURL: string }> = {
   anthropic: { kind: 'anthropic', baseURL: 'https://api.anthropic.com' },
   openai: { kind: 'openai-compatible', baseURL: 'https://api.openai.com/v1' },
-  kimi: { kind: 'openai-compatible', baseURL: 'https://api.moonshot.ai/v1' },
+  kimi: { kind: 'openai-compatible', baseURL: 'https://api.kimi.com/coding/v1' },
   deepseek: { kind: 'openai-compatible', baseURL: 'https://api.deepseek.com/v1' },
   glm: {
     kind: 'openai-compatible',
