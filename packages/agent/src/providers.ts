@@ -3,9 +3,10 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { LanguageModel } from 'ai'
 import type { CredentialProvider } from './credentials'
 
-type ProviderKind = 'anthropic' | 'openai-compatible'
+export type ProviderKind = 'anthropic' | 'openai-compatible'
 
-type ProviderProfile = {
+export type ProviderProfile = {
+  id: string
   kind: ProviderKind
   baseURL: string
   /** Preset model ids the renderer dropdown offers. Empty array = provider
@@ -24,9 +25,10 @@ type ProviderProfile = {
  * to (a) build an ai-sdk model and (b) migrate stored configs with stale
  * model ids.
  */
-const PROFILES: Record<string, ProviderProfile> = {
-  anthropic: { kind: 'anthropic', baseURL: 'https://api.anthropic.com', models: [], defaultModelId: '' },
+export const PROFILES: Record<string, ProviderProfile> = {
+  anthropic: { id: 'anthropic', kind: 'anthropic', baseURL: 'https://api.anthropic.com', models: [], defaultModelId: '' },
   openai: {
+    id: 'openai',
     kind: 'openai-compatible',
     baseURL: 'https://api.openai.com/v1',
     models: [],
@@ -36,29 +38,39 @@ const PROFILES: Record<string, ProviderProfile> = {
   // clients by SDK shape — OpenAI-compatible calls are rejected with
   // "Kimi For Coding is currently only available for Coding Agents…".
   kimi: {
+    id: 'kimi',
     kind: 'anthropic',
     baseURL: 'https://api.kimi.com/coding/v1',
     models: ['kimi-k2-thinking', 'k2p6', 'k2p5', 'kimi-k2.5'],
     defaultModelId: 'kimi-k2-thinking'
   },
   deepseek: {
+    id: 'deepseek',
     kind: 'openai-compatible',
     baseURL: 'https://api.deepseek.com/v1',
     models: [],
     defaultModelId: ''
   },
   glm: {
+    id: 'glm',
     kind: 'openai-compatible',
     baseURL: 'https://open.bigmodel.cn/api/paas/v4/',
     models: [],
     defaultModelId: ''
   },
   qwen: {
+    id: 'qwen',
     kind: 'openai-compatible',
     baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     models: [],
     defaultModelId: ''
   }
+}
+
+/** Public catalog of supported providers. Server filters this to only
+ *  those with at least one model in their catalog before exposing it. */
+export function listSupportedProviders(): ProviderProfile[] {
+  return Object.values(PROFILES)
 }
 
 /**

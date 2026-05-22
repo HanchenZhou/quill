@@ -41,7 +41,7 @@ export function Editor({ value, onChange, onSave }: Props): JSX.Element {
       onKeyDown={onKeyDown}
       spellCheck={false}
       // 16px to dodge iOS Safari auto-zoom on focus.
-      className="w-full h-full resize-none bg-[--paper] text-[--ink] outline-none px-6 sm:px-10 py-8 font-mono leading-relaxed"
+      className="w-full h-full resize-none bg-[var(--paper)] text-[var(--ink)] outline-none px-6 sm:px-10 py-8 font-mono leading-relaxed"
       style={{
         fontFamily: '"JetBrains Mono", "SF Mono", Menlo, Consolas, monospace',
         fontSize: '16px',

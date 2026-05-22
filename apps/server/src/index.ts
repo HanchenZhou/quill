@@ -5,6 +5,7 @@ import { loadConfig } from './config'
 import { createAuthRoutes } from './auth-routes'
 import { createVaultRoutes } from './vault'
 import { createAgentRoutes } from './agent'
+import { ProvidersStore } from './providers-store'
 import { requireSession } from './auth'
 
 const CONFIG_PATH = process.env.QUILL_CONFIG ?? './config.yaml'
@@ -12,8 +13,17 @@ const CONFIG_PATH = process.env.QUILL_CONFIG ?? './config.yaml'
 // the server only serves /api/* and the user runs `vite dev` separately
 // on :5173, which proxies /api/* back here.
 const WEB_DIST = process.env.QUILL_WEB_DIST ?? './apps/web/dist'
+// Writable state directory — at-rest storage for runtime-edited settings
+// (providers.json today; reserve for future state files).
+const STATE_DIR = process.env.QUILL_STATE_DIR ?? '/data/state'
 
 const config = await loadConfig(CONFIG_PATH)
+
+// Providers store — seeded from config.yaml.ai on first boot so existing
+// deployments keep working, then drives runtime additions via the web UI.
+const providersStore = new ProvidersStore(join(STATE_DIR, 'providers.json'))
+await providersStore.load()
+await providersStore.seedFromConfig(config.ai?.providers ?? [])
 
 const app = new Hono()
 
@@ -38,7 +48,7 @@ app.route('/api/vault', vaultApp)
 // The agent routes module owns its own session-check middleware because
 // the WS upgrade has to verify before the protocol switch.
 const agentRoutes = createAgentRoutes({
-  providers: config.ai?.providers ?? [],
+  store: providersStore,
   sessionSecret: config.auth.session_secret,
   vaultRoot: config.vault.path
 })
@@ -111,7 +121,8 @@ console.log(
     event: 'server-start',
     port: config.server.port,
     vault: config.vault.path,
-    aiProviders: config.ai?.providers.length ?? 0,
+    stateDir: STATE_DIR,
+    aiProvidersConfigured: providersStore.listPublic().length,
     webDist: webDistAvailable ? WEB_DIST : null
   })
 )

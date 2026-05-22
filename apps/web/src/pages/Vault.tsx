@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import type { FileNode, Scope } from '@quill/shared-types'
 import { AgentPanel } from '../components/AgentPanel'
 import { Editor } from '../components/Editor'
-import { FileTree } from '../components/FileTree'
+import { FileTree, type FileTreeHandle } from '../components/FileTree'
 import { ModeSwitcher, type ViewMode } from '../components/ModeSwitcher'
 import { Preview } from '../components/Preview'
 import { RemoteVault, UnauthorizedError } from '../lib/remote-vault'
 import { logout } from '../lib/auth'
+import { useAgentSession } from '../lib/use-agent-session'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | { error: string }
 
@@ -24,6 +25,7 @@ export function Vault(): JSX.Element {
   const [mode, setMode] = useState<ViewMode>('preview')
   const [save, setSave] = useState<SaveStatus>('idle')
   const [aiOpen, setAiOpen] = useState(false)
+  const fileTreeRef = useRef<FileTreeHandle | null>(null)
 
   // The server overrides scope.root with its configured vault path. We
   // send a placeholder so the protocol's required field is satisfied.
@@ -31,6 +33,33 @@ export function Vault(): JSX.Element {
     () => ({ kind: 'workspace', root: '<vault>' }),
     []
   )
+
+  // Agent session owned at this level (not inside AgentPanel) so the
+  // conversation survives the AI panel being toggled closed. It also
+  // persists settled turns to localStorage so a hard reload keeps them.
+  // When a run finishes, refresh the file tree — the agent may have
+  // written or deleted files via tool calls.
+  const reloadCurrentFileFromDisk = useCallback(async () => {
+    if (!selected) return
+    try {
+      const fresh = await vault.read(selected.path)
+      setSource(fresh)
+      // Only blow away the user's buffer if it was the same as source —
+      // i.e. they haven't typed anything since last save. Otherwise the
+      // agent's write goes into `source` so the dirty indicator surfaces
+      // the conflict, but the user's typing stays intact.
+      setBuffer((curBuf) => (curBuf === source ? fresh : curBuf))
+    } catch {
+      /* file may have been deleted by the agent — let the next interaction surface that */
+    }
+  }, [selected, vault, source])
+
+  const agent = useAgentSession({
+    onActivityComplete: () => {
+      fileTreeRef.current?.refresh().catch(() => undefined)
+      void reloadCurrentFileFromDisk()
+    }
+  })
 
   const dirty = buffer !== source
 
@@ -130,25 +159,42 @@ export function Vault(): JSX.Element {
 
   return (
     <div className="h-[100dvh] flex">
+      {/* Sidebar: full-screen drawer on mobile (so iOS Safari chrome
+          samples paper-dim and stays light, not the dim-overlay color),
+          fixed 72 inline on md+. */}
       <aside
         className={[
-          'fixed inset-y-0 left-0 z-20 w-72 bg-[--paper-dim] border-r border-[--rule] flex flex-col',
+          'fixed inset-y-0 left-0 z-20 w-full bg-[var(--paper-dim)] flex flex-col',
+          'md:w-72 md:border-r md:border-[var(--rule)]',
           'transition-transform duration-200 md:translate-x-0 md:static md:flex',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         ].join(' ')}
       >
-        <div className="h-12 flex items-center justify-between px-3 border-b border-[--rule-soft]">
-          <span className="font-display text-lg text-[--ink]">Quill</span>
+        <div className="h-12 flex items-center gap-2 px-3 border-b border-[var(--rule-soft)]">
+          {/* Close button on mobile only — without it the user would have
+              to pick a file to dismiss the drawer. */}
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden text-[var(--ink-soft)] text-lg leading-none px-1"
+            aria-label="关闭侧栏"
+          >
+            ✕
+          </button>
+          <span className="font-display text-lg text-[var(--ink)] flex-1">
+            Quill
+          </span>
           <button
             type="button"
             onClick={onLogout}
-            className="text-xs text-[--ink-faint] hover:text-[--accent] px-2 py-1"
+            className="text-xs text-[var(--ink-faint)] hover:text-[var(--accent)] px-2 py-1"
           >
             登出
           </button>
         </div>
         <div className="flex-1 overflow-hidden">
           <FileTree
+            ref={fileTreeRef}
             vault={vault}
             selectedPath={selected?.path ?? null}
             onSelect={trySwitchFile}
@@ -170,29 +216,20 @@ export function Vault(): JSX.Element {
         </div>
       </aside>
 
-      {sidebarOpen && (
-        <button
-          type="button"
-          aria-label="关闭侧栏"
-          onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 z-10 bg-[--ink] opacity-30 md:hidden"
-        />
-      )}
-
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="h-12 flex items-center gap-3 px-3 border-b border-[--rule-soft]">
+        <header className="h-12 flex items-center gap-3 px-3 border-b border-[var(--rule-soft)]">
           <button
             type="button"
             onClick={() => setSidebarOpen((s) => !s)}
-            className="md:hidden text-[--ink-soft] p-2"
+            className="md:hidden text-[var(--ink-soft)] p-2"
             aria-label="切换侧栏"
           >
             ☰
           </button>
-          <span className="text-sm text-[--ink-soft] truncate flex items-center gap-1.5 flex-1 min-w-0">
+          <span className="text-sm text-[var(--ink-soft)] truncate flex items-center gap-1.5 flex-1 min-w-0">
             <span className="truncate">{selected?.path ?? '选择一个文件'}</span>
             {dirty && (
-              <span className="text-[--accent] shrink-0" title="未保存">
+              <span className="text-[var(--accent)] shrink-0" title="未保存">
                 •
               </span>
             )}
@@ -211,19 +248,26 @@ export function Vault(): JSX.Element {
             className={[
               'text-sm rounded px-2 py-1 transition-colors',
               aiOpen
-                ? 'bg-[--accent-soft] text-[--ink]'
-                : 'text-[--ink-faint] hover:text-[--ink] hover:bg-[--paper-soft]'
+                ? 'bg-[var(--accent-soft)] text-[var(--ink)]'
+                : 'text-[var(--ink-faint)] hover:text-[var(--ink)] hover:bg-[var(--paper-soft)]'
             ].join(' ')}
           >
             AI
           </button>
+          <Link
+            to="/settings"
+            title="设置"
+            className="text-base text-[var(--ink-faint)] hover:text-[var(--ink)] hover:bg-[var(--paper-soft)] rounded px-2 py-1 leading-none"
+          >
+            ⚙
+          </Link>
         </header>
         <div className="flex-1 overflow-y-auto scroll-thin">
           {loadErr && (
-            <div className="px-6 py-4 text-sm text-[--accent]">{loadErr}</div>
+            <div className="px-6 py-4 text-sm text-[var(--accent)]">{loadErr}</div>
           )}
           {!selected && !loadErr && (
-            <div className="flex items-center justify-center h-full text-sm text-[--ink-faint]">
+            <div className="flex items-center justify-center h-full text-sm text-[var(--ink-faint)]">
               在左侧选择一个 markdown 文件
             </div>
           )}
@@ -242,10 +286,11 @@ export function Vault(): JSX.Element {
         <aside
           className={[
             'fixed inset-0 z-30 md:static md:z-auto md:w-96 md:flex-shrink-0',
-            'md:border-l md:border-[--rule]'
+            'md:border-l md:border-[var(--rule)]'
           ].join(' ')}
         >
           <AgentPanel
+            session={agent}
             scope={agentScope}
             currentBuffer={selected ? buffer : undefined}
             onClose={() => setAiOpen(false)}
@@ -266,14 +311,14 @@ function SaveStatusIndicator({
   onSave: () => void
 }): JSX.Element {
   if (status === 'saving') {
-    return <span className="text-xs text-[--ink-faint]">保存中…</span>
+    return <span className="text-xs text-[var(--ink-faint)]">保存中…</span>
   }
   if (status === 'saved') {
-    return <span className="text-xs text-[--ink-faint]">已保存</span>
+    return <span className="text-xs text-[var(--ink-faint)]">已保存</span>
   }
   if (typeof status === 'object') {
     return (
-      <span className="text-xs text-[--accent]" title={status.error}>
+      <span className="text-xs text-[var(--accent)]" title={status.error}>
         保存失败
       </span>
     )
@@ -283,7 +328,7 @@ function SaveStatusIndicator({
       type="button"
       onClick={onSave}
       disabled={!dirty}
-      className="text-xs text-[--ink-soft] hover:text-[--ink] disabled:opacity-40 disabled:cursor-not-allowed px-2 py-1 rounded hover:bg-[--paper-dim]"
+      className="text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] disabled:opacity-40 disabled:cursor-not-allowed px-2 py-1 rounded hover:bg-[var(--paper-dim)]"
       title="保存 (⌘S)"
     >
       保存
