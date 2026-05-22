@@ -6,7 +6,9 @@ import type {
   AgentRunArgs,
   HistoryMessage
 } from '@quill/shared-types'
-import { AgentClient } from './agent-client'
+import { AgentClient, type AgentConnectionStatus } from './agent-client'
+import { providersApi, type CatalogEntry } from './providers-api'
+import { coerceUsage, type Usage } from './usage'
 
 export type AgentTurn = {
   runId: string
@@ -18,21 +20,22 @@ export type AgentTurn = {
    *  fresh empty Map is correct. */
   pendingApprovals: Map<string, ApprovalPayload>
   status: 'running' | 'done' | { error: string }
+  /** Token counts emitted by the finish event. Undefined for runs that
+   *  errored before producing any usage data, or where the SDK didn't
+   *  expose it. */
+  usage?: Usage
 }
 
 type PersistedTurn = Omit<AgentTurn, 'pendingApprovals' | 'status'> & {
   status: 'done' | { error: string }
 }
 
-// Bumped to v2 when turn-storage went from a single object to an array.
-// Old v1 entries are intentionally not migrated — they were single-turn
-// snapshots only the dev environment ever saw.
-const LS_KEY = 'quill-agent-turns-v2'
+export type SelectedModel = { providerId: string; modelId: string }
+
+const LS_TURNS = 'quill-agent-turns-v2'
+const LS_MODEL = 'quill-agent-model-v1'
 
 function persist(turns: AgentTurn[]): void {
-  // Strip the live runtime fields (pendingApprovals, 'running' status) and
-  // drop any turn still in flight — saving a 'running' status across a
-  // reload would lie about server state.
   const settled = turns
     .filter((t) => t.status !== 'running')
     .map<PersistedTurn>((t) => ({
@@ -40,14 +43,15 @@ function persist(turns: AgentTurn[]): void {
       prompt: t.prompt,
       text: t.text,
       toolCalls: t.toolCalls,
-      status: t.status as 'done' | { error: string }
+      status: t.status as 'done' | { error: string },
+      usage: t.usage
     }))
   if (settled.length === 0) {
-    localStorage.removeItem(LS_KEY)
+    localStorage.removeItem(LS_TURNS)
     return
   }
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(settled))
+    localStorage.setItem(LS_TURNS, JSON.stringify(settled))
   } catch {
     /* localStorage full / disabled — drop silently */
   }
@@ -55,7 +59,7 @@ function persist(turns: AgentTurn[]): void {
 
 function restore(): AgentTurn[] {
   try {
-    const raw = localStorage.getItem(LS_KEY)
+    const raw = localStorage.getItem(LS_TURNS)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
@@ -67,23 +71,41 @@ function restore(): AgentTurn[] {
         text: p.text,
         toolCalls: Array.isArray(p.toolCalls) ? p.toolCalls : [],
         pendingApprovals: new Map(),
-        status: p.status
+        status: p.status,
+        usage: p.usage
       }))
   } catch {
     return []
   }
 }
 
+function restoreSelectedModel(): SelectedModel | null {
+  try {
+    const raw = localStorage.getItem(LS_MODEL)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (
+      parsed &&
+      typeof parsed.providerId === 'string' &&
+      typeof parsed.modelId === 'string'
+    ) {
+      return parsed as SelectedModel
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+function persistSelectedModel(m: SelectedModel | null): void {
+  if (m) localStorage.setItem(LS_MODEL, JSON.stringify(m))
+  else localStorage.removeItem(LS_MODEL)
+}
+
 function newId(): string {
   return Math.random().toString(36).slice(2, 11)
 }
 
-/** Build conversation history to send back to the agent so it has context
- *  across turns. Only fully-completed turns are included (errored runs
- *  are skipped — the user's intent was understood but the call failed,
- *  so reusing them as context would confuse the next prompt). Tool calls
- *  are NOT replayed in history; the assistant's text response is the
- *  load-bearing signal for follow-up. */
 function buildHistory(turns: AgentTurn[]): HistoryMessage[] {
   const out: HistoryMessage[] = []
   for (const t of turns) {
@@ -96,13 +118,55 @@ function buildHistory(turns: AgentTurn[]): HistoryMessage[] {
   return out
 }
 
+/** Reconcile the user's stored choice against the currently-configured
+ *  + catalog-known providers. If the stored selection still references a
+ *  configured provider AND a catalog model, keep it. Otherwise fall back
+ *  to the first configured provider/model. Returns null when nothing is
+ *  configured at all. */
+function pickSelectedModel(
+  configured: AgentProviderInfo[],
+  catalog: CatalogEntry[],
+  stored: SelectedModel | null
+): SelectedModel | null {
+  if (configured.length === 0) return null
+  const configuredById = new Map(configured.map((p) => [p.id, p]))
+  const catalogById = new Map(catalog.map((p) => [p.id, p]))
+
+  if (stored) {
+    const cfg = configuredById.get(stored.providerId)
+    const cat = catalogById.get(stored.providerId)
+    if (cfg && cat && cat.models.some((m) => m.id === stored.modelId)) {
+      return stored
+    }
+  }
+  // Fall back: first configured provider that has at least one catalog model.
+  for (const cfg of configured) {
+    const cat = catalogById.get(cfg.id)
+    if (cat && cat.models.length > 0) {
+      return { providerId: cfg.id, modelId: cat.defaultModelId || cat.models[0].id }
+    }
+  }
+  return null
+}
+
 export type AgentSession = {
   client: AgentClient
+  /** WS connection status — UI uses this for the reconnect badge. */
+  status: AgentConnectionStatus
   providers: AgentProviderInfo[] | null
+  catalog: CatalogEntry[] | null
   loadErr: string | null
   turns: AgentTurn[]
   prompt: string
   setPrompt: (s: string) => void
+  selectedModel: SelectedModel | null
+  setSelectedModel: (m: SelectedModel) => void
+  /** Total context window of the currently selected model. 0 when
+   *  unknown (no selection or model not in catalog). */
+  contextTokens: number
+  /** Last settled turn's usage. Best proxy for "current context size"
+   *  since each turn's input ≈ prior turns' input + output. */
+  lastUsage: Usage | undefined
   send: (args: {
     text: string
     scope: AgentRunArgs['scope']
@@ -114,26 +178,29 @@ export type AgentSession = {
   reset: () => void
 }
 
-/**
- * Owns the AgentClient + multi-turn conversation + prompt draft. Lives
- * at the Vault layer so toggling the AgentPanel doesn't blow state away.
- * Persists settled turns to localStorage so a hard reload also keeps them.
- *
- * `onActivityComplete` fires whenever a run reaches a terminal state
- * (finish / error). Vault uses this to refresh the file tree — the
- * agent may have written/deleted/moved files server-side.
- */
 export function useAgentSession(deps: {
   onActivityComplete?: () => void
 }): AgentSession {
-  const client = useMemo(() => new AgentClient(), [])
+  // Status state stored in a ref-backed state so the AgentClient callback
+  // can update it without re-creating the client (which would tear down
+  // the connection on every status change).
+  const [status, setStatus] = useState<AgentConnectionStatus>('closed')
+  const client = useMemo(
+    () =>
+      new AgentClient({
+        onStatus: (s) => setStatus(s)
+      }),
+    []
+  )
   const [providers, setProviders] = useState<AgentProviderInfo[] | null>(null)
+  const [catalog, setCatalog] = useState<CatalogEntry[] | null>(null)
   const [loadErr, setLoadErr] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
   const [turns, setTurns] = useState<AgentTurn[]>(() => restore())
+  const [selectedModel, setSelectedModelState] = useState<SelectedModel | null>(() =>
+    restoreSelectedModel()
+  )
 
-  // The completion callback can change without us needing to re-create
-  // event handlers — stash in a ref.
   const onCompleteRef = useRef(deps.onActivityComplete)
   useEffect(() => {
     onCompleteRef.current = deps.onActivityComplete
@@ -143,14 +210,26 @@ export function useAgentSession(deps: {
     persist(turns)
   }, [turns])
 
-  // Load provider catalog once.
+  // Load configured providers + catalog in parallel.
   useEffect(() => {
     let cancelled = false
-    client
-      .fetchProviders()
-      .then((p) => {
+    Promise.all([client.fetchProviders(), providersApi.catalog()])
+      .then(([p, c]) => {
         if (cancelled) return
-        setProviders(p.filter((x) => x.models.length > 0))
+        const configured = p.filter((x) => x.models.length > 0)
+        setProviders(configured)
+        setCatalog(c)
+        // After we know what's available, pin selection to something valid.
+        setSelectedModelState((cur) => {
+          const next = pickSelectedModel(configured, c, cur)
+          if (
+            next &&
+            (cur?.providerId !== next.providerId || cur?.modelId !== next.modelId)
+          ) {
+            persistSelectedModel(next)
+          }
+          return next
+        })
       })
       .catch((err) => {
         if (cancelled) return
@@ -161,13 +240,16 @@ export function useAgentSession(deps: {
     }
   }, [client])
 
-  // Close WS only when the hook itself unmounts (= page navigation), NOT
-  // when the panel toggles closed.
   useEffect(() => {
     return () => {
       client.close()
     }
   }, [client])
+
+  const setSelectedModel = useCallback((m: SelectedModel) => {
+    setSelectedModelState(m)
+    persistSelectedModel(m)
+  }, [])
 
   const handleEvent = useCallback((runId: string, event: AgentEvent): void => {
     setTurns((prev) => {
@@ -190,6 +272,7 @@ export function useAgentSession(deps: {
           break
         case 'finish':
           next.status = 'done'
+          next.usage = coerceUsage(event.usage) ?? cur.usage
           queueMicrotask(() => onCompleteRef.current?.())
           break
         case 'error':
@@ -207,9 +290,7 @@ export function useAgentSession(deps: {
 
   const send: AgentSession['send'] = useCallback(
     async ({ text, scope, currentBuffer, currentSelection }) => {
-      if (!providers || providers.length === 0) return
-      const provider = providers[0]
-      const modelId = provider.models[0]
+      if (!selectedModel) return
       const runId = newId()
       const newTurn: AgentTurn = {
         runId,
@@ -219,15 +300,14 @@ export function useAgentSession(deps: {
         pendingApprovals: new Map(),
         status: 'running'
       }
-      // Snapshot history BEFORE we append — the new turn must not see itself.
       const history = buildHistory(turns)
       setTurns((prev) => [...prev, newTurn])
       try {
         await client.run(
           runId,
           {
-            providerId: provider.id,
-            modelId,
+            providerId: selectedModel.providerId,
+            modelId: selectedModel.modelId,
             prompt: text,
             scope,
             mode: 'build',
@@ -247,7 +327,7 @@ export function useAgentSession(deps: {
         )
       }
     },
-    [client, providers, turns, handleEvent]
+    [client, selectedModel, turns, handleEvent]
   )
 
   const runningTurn = turns.find((t) => t.status === 'running')
@@ -280,13 +360,33 @@ export function useAgentSession(deps: {
     setTurns([])
   }, [])
 
+  // Derive context window + last usage from catalog + turns.
+  const contextTokens = useMemo(() => {
+    if (!selectedModel || !catalog) return 0
+    const profile = catalog.find((p) => p.id === selectedModel.providerId)
+    return profile?.models.find((m) => m.id === selectedModel.modelId)?.contextTokens ?? 0
+  }, [selectedModel, catalog])
+
+  const lastUsage = useMemo(() => {
+    for (let i = turns.length - 1; i >= 0; i--) {
+      if (turns[i].status === 'done' && turns[i].usage) return turns[i].usage
+    }
+    return undefined
+  }, [turns])
+
   return {
     client,
+    status,
     providers,
+    catalog,
     loadErr,
     turns,
     prompt,
     setPrompt,
+    selectedModel,
+    setSelectedModel,
+    contextTokens,
+    lastUsage,
     send,
     cancel,
     respond,

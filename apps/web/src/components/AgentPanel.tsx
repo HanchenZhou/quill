@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ApprovalPayload, Scope } from '@quill/shared-types'
 import { renderMarkdown } from '../lib/markdown'
-import type { AgentSession, AgentTurn } from '../lib/use-agent-session'
+import type { AgentSession, AgentTurn, SelectedModel } from '../lib/use-agent-session'
+import type { AgentConnectionStatus } from '../lib/agent-client'
+import { formatContextWindow, formatTokens } from '../lib/usage'
 
 type Props = {
   /** Owned by Vault via useAgentSession so panel mount/unmount doesn't
@@ -20,13 +22,27 @@ export function AgentPanel({
   currentSelection,
   onClose
 }: Props): JSX.Element {
-  const { providers, loadErr, turns, prompt, setPrompt, send, cancel, respond, reset } = session
+  const {
+    status,
+    providers,
+    catalog,
+    loadErr,
+    turns,
+    prompt,
+    setPrompt,
+    selectedModel,
+    setSelectedModel,
+    contextTokens,
+    lastUsage,
+    send,
+    cancel,
+    respond,
+    reset
+  } = session
   const bottomRef = useRef<HTMLDivElement>(null)
   const runningTurn = turns.find((t) => t.status === 'running')
   const latestTurn = turns[turns.length - 1] ?? null
 
-  // Auto-scroll to the latest output as it streams in. Watch the latest
-  // turn's mutating fields so partial streams keep us pinned to the bottom.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [
@@ -45,21 +61,21 @@ export function AgentPanel({
 
   if (loadErr) {
     return (
-      <PanelShell onClose={onClose} title="AI">
+      <PanelShell onClose={onClose} status={status}>
         <div className="p-4 text-sm text-[var(--accent)]">{loadErr}</div>
       </PanelShell>
     )
   }
-  if (providers === null) {
+  if (providers === null || catalog === null) {
     return (
-      <PanelShell onClose={onClose} title="AI">
+      <PanelShell onClose={onClose} status={status}>
         <div className="p-4 text-sm text-[var(--ink-faint)]">加载中…</div>
       </PanelShell>
     )
   }
-  if (providers.length === 0) {
+  if (providers.length === 0 || !selectedModel) {
     return (
-      <PanelShell onClose={onClose} title="AI">
+      <PanelShell onClose={onClose} status={status}>
         <div className="p-4 text-sm text-[var(--ink-soft)]">
           未配置 AI provider。点击右上角 ⚙ 进入设置，配上一个 provider 即可使用。
         </div>
@@ -67,14 +83,28 @@ export function AgentPanel({
     )
   }
 
-  const provider = providers[0]
-  const model = provider.models[0]
-  const title = `AI · ${provider.id}/${model}`
+  // Token budget: input + output of the LAST settled turn is the closest
+  // proxy for "current context size" — the next turn's input will start
+  // from roughly that number, plus the new prompt.
+  const usedTokens = lastUsage ? lastUsage.input + lastUsage.output : 0
 
   return (
     <PanelShell
       onClose={onClose}
-      title={title}
+      status={status}
+      header={
+        <>
+          <ModelPicker
+            providers={providers}
+            catalog={catalog}
+            selected={selectedModel}
+            onChange={setSelectedModel}
+          />
+          {contextTokens > 0 && (
+            <TokenBudget used={usedTokens} window={contextTokens} />
+          )}
+        </>
+      }
       onReset={turns.length > 0 ? reset : undefined}
     >
       <div className="flex-1 overflow-y-auto scroll-thin px-4 py-3 space-y-6">
@@ -173,22 +203,29 @@ function TurnView({
 }
 
 function PanelShell({
-  title,
+  header,
+  status,
   onClose,
   onReset,
   children
 }: {
-  title: string
+  /** Custom header content (model picker + token budget). Falls back to
+   *  a plain "AI" label when omitted (for the loading / empty states). */
+  header?: React.ReactNode
+  status: AgentConnectionStatus
   onClose: () => void
-  /** When present, show a 清空 button — used by the panel header so the
-   *  user can drop a stale conversation without closing the whole thing. */
+  /** When present, show a 清空 button — lets the user drop a stale
+   *  conversation without closing the whole panel. */
   onReset?: () => void
   children: React.ReactNode
 }): JSX.Element {
   return (
     <div className="w-full h-full flex flex-col bg-[var(--paper)] md:border-l md:border-[var(--rule)]">
       <header className="h-12 flex items-center gap-2 px-3 border-b border-[var(--rule-soft)]">
-        <span className="text-sm text-[var(--ink-soft)] truncate flex-1">{title}</span>
+        <ConnectionDot status={status} />
+        <div className="flex-1 flex items-center gap-2 min-w-0">
+          {header ?? <span className="text-sm text-[var(--ink-soft)]">AI</span>}
+        </div>
         {onReset && (
           <button
             type="button"
@@ -210,6 +247,129 @@ function PanelShell({
       </header>
       {children}
     </div>
+  )
+}
+
+function ConnectionDot({ status }: { status: AgentConnectionStatus }): JSX.Element {
+  const config: Record<AgentConnectionStatus, { color: string; title: string }> = {
+    open: { color: 'bg-[oklch(0.66_0.13_145)]', title: '已连接' },
+    connecting: { color: 'bg-[var(--ink-ghost)] animate-pulse', title: '正在连接…' },
+    reconnecting: { color: 'bg-[var(--accent)] animate-pulse', title: '正在重连…' },
+    closed: { color: 'bg-[var(--ink-ghost)]', title: '已断开' }
+  }
+  const c = config[status]
+  return (
+    <span
+      className={`inline-block w-2 h-2 rounded-full ${c.color} shrink-0`}
+      title={c.title}
+      aria-label={c.title}
+    />
+  )
+}
+
+function ModelPicker({
+  providers,
+  catalog,
+  selected,
+  onChange
+}: {
+  providers: import('@quill/shared-types').AgentProviderInfo[]
+  catalog: import('./../lib/providers-api').CatalogEntry[]
+  selected: SelectedModel
+  onChange: (m: SelectedModel) => void
+}): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const catalogById = new Map(catalog.map((p) => [p.id, p]))
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent): void {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('click', onDocClick)
+    return () => document.removeEventListener('click', onDocClick)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative min-w-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-sm text-[var(--ink)] hover:bg-[var(--paper-soft)] rounded px-2 py-1 min-w-0 max-w-full"
+        title="切换模型"
+      >
+        <span className="truncate font-mono">
+          {selected.providerId}/{selected.modelId}
+        </span>
+        <span className="text-[var(--ink-faint)] shrink-0">▾</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 bg-[var(--paper)] border border-[var(--rule)] rounded shadow-lg min-w-[220px] max-h-[60vh] overflow-y-auto py-1">
+          {providers.map((p) => {
+            const cat = catalogById.get(p.id)
+            // Only show models that exist in the catalog (have real context-window data).
+            const models = cat?.models ?? []
+            if (models.length === 0) return null
+            return (
+              <div key={p.id} className="py-0.5">
+                <div className="px-3 py-0.5 text-[10px] uppercase tracking-wider text-[var(--ink-faint)]">
+                  {p.id}
+                </div>
+                {models.map((m) => {
+                  const active =
+                    selected.providerId === p.id && selected.modelId === m.id
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        onChange({ providerId: p.id, modelId: m.id })
+                        setOpen(false)
+                      }}
+                      className={[
+                        'w-full text-left px-3 py-1.5 text-sm flex items-center gap-2',
+                        active
+                          ? 'bg-[var(--accent-soft)] text-[var(--ink)]'
+                          : 'text-[var(--ink-soft)] hover:bg-[var(--paper-dim)]'
+                      ].join(' ')}
+                    >
+                      <span className="font-mono truncate flex-1">{m.label ?? m.id}</span>
+                      {m.contextTokens > 0 && (
+                        <span className="text-[10px] text-[var(--ink-faint)] shrink-0">
+                          {formatContextWindow(m.contextTokens)}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TokenBudget({ used, window: total }: { used: number; window: number }): JSX.Element {
+  const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0
+  // Color crosses warning around 70%, alarm at 90%.
+  const tone =
+    pct >= 90
+      ? 'text-[var(--accent)]'
+      : pct >= 70
+        ? 'text-[var(--ink)]'
+        : 'text-[var(--ink-faint)]'
+  return (
+    <span
+      className={`text-[11px] font-mono shrink-0 ${tone}`}
+      title={`${formatTokens(used)} of ${formatTokens(total)} tokens (${pct}%)`}
+    >
+      {formatContextWindow(used)} / {formatContextWindow(total)}
+    </span>
   )
 }
 
