@@ -4,6 +4,15 @@ import { extname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { createWindow, openSettingsWindow, type InitialAction } from './windows'
+import {
+  listProviders,
+  upsertProvider,
+  updateProviderModel,
+  removeProvider,
+  testProvider,
+  getDefaultProvider,
+  setDefaultProvider
+} from './providers'
 
 export type FileNode = {
   name: string
@@ -159,6 +168,25 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle('app:version', async () => app.getVersion())
+
+  // -------- Provider config (key storage + reachability test) ---------
+  ipcMain.handle('providers:list', async () => listProviders())
+  ipcMain.handle(
+    'providers:upsert',
+    async (_evt, args: { id: string; key: string; model: string }) =>
+      upsertProvider(args.id, args.key, args.model)
+  )
+  ipcMain.handle(
+    'providers:updateModel',
+    async (_evt, args: { id: string; model: string }) =>
+      updateProviderModel(args.id, args.model)
+  )
+  ipcMain.handle('providers:remove', async (_evt, id: string) => removeProvider(id))
+  ipcMain.handle('providers:test', async (_evt, baseURL: string) => testProvider(baseURL))
+  ipcMain.handle('providers:getDefault', async () => getDefaultProvider())
+  ipcMain.handle('providers:setDefault', async (_evt, id: string | null) =>
+    setDefaultProvider(id)
+  )
 
   ipcMain.handle(
     'dialog:confirmOpenChoice',

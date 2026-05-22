@@ -50,6 +50,20 @@ const api = {
     openSettings: (): Promise<void> => ipcRenderer.invoke('app:openSettings'),
     version: (): Promise<string> => ipcRenderer.invoke('app:version')
   },
+  providers: {
+    list: (): Promise<Array<{ id: string; model: string; addedAt: number; updatedAt: number }>> =>
+      ipcRenderer.invoke('providers:list'),
+    upsert: (args: { id: string; key: string; model: string }): Promise<void> =>
+      ipcRenderer.invoke('providers:upsert', args),
+    updateModel: (args: { id: string; model: string }): Promise<void> =>
+      ipcRenderer.invoke('providers:updateModel', args),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke('providers:remove', id),
+    test: (baseURL: string): Promise<{ ok: boolean; status?: number; error?: string }> =>
+      ipcRenderer.invoke('providers:test', baseURL),
+    getDefault: (): Promise<string | null> => ipcRenderer.invoke('providers:getDefault'),
+    setDefault: (id: string | null): Promise<void> =>
+      ipcRenderer.invoke('providers:setDefault', id)
+  },
   fs: {
     readFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:readFile', path),
     writeFile: (path: string, content: string): Promise<void> =>
