@@ -1,35 +1,66 @@
 <div align="center">
 
+<img src="docs/screenshots/icon.png" width="128" alt="Quill icon" />
+
 # Quill
 
-**一款轻量、专注的 Markdown 编辑预览桌面端。**
+**一款轻量、专注的 Markdown 编辑预览桌面端，带内置 AI Agent。**
 
 Electron · React 18 · TypeScript · Bun · Tailwind v4 · CodeMirror 6
 
 </div>
 
+![Quill 空状态](docs/screenshots/empty-state.png)
+
 ---
 
 ## 简介
 
-Quill 是一个面向写作者与开发者的本地 Markdown 编辑器，目标是把"打开就写、所见即所得的预览、零负担的本地文件管理"这件事做扎实。
+Quill 是一个面向写作者与开发者的本地 Markdown 编辑器，目标是把"打开就写、所见即所得的预览、零负担的本地文件管理"这件事做扎实，并提供一个**可控、可见、可中止**的 AI Agent 来辅助写作与编辑。
 
 设计哲学：
 - **本地优先**：你的笔记就是你硬盘上的 `.md` 文件，没有云端账号、没有专有格式。
 - **少即是多**：先把核心写作体验做到位，不堆砌一次都不会用的功能。
+- **AI 是助手不是主角**：Agent 一切动作（读、写、删、计划）都用户可见、可批准、可取消；上下文压缩、模型选择、工具范围都在面板里直接管理。
 - **可扩展骨架**：编辑器 / 解析器 / 主题 / IPC 都做成可替换层，方便未来演进。
 
 ### 主要特性
 
+**编辑与阅读**
 - **双模式工作流** — Workspace（打开文件夹）与 Single-file（双击 / 拖入单文件）两种入口，按场景自适应布局
 - **三态视图** — 纯编辑 / 分栏 / 纯预览，一键切换；默认分栏，每次打开新文件回归分栏
+- **大纲面板** — 实时跟随光标定位，长文档随手跳章节
 - **CodeMirror 6 编辑器** — 内置 `lang-markdown`、查找替换、主题切换
 - **markdown-it + highlight.js 预览** — 代码块语法高亮，Tailwind Typography 排版
+
+**AI Agent**
+- **Plan / Build / Router 三角** — Router 自动判别复杂任务走 Plan→Build，简单任务直跑 Build；可用 `/plan` `/build` 斜杠强制
+- **写工具带审批** — `write_file` / `apply_edit` / `create_file` 每次执行前弹卡片确认，diff 可视；拒绝 = tool error，agent 不会偷偷重试
+- **Web fetch 工具** — agent 看到链接自动抓内容；私网 / loopback / 非 http(s) 由 SSRF guard 拒绝
+- **每会话独立模型** — 输入框上方可分别为 Plan 和 Build 选 provider/model，带上下文窗大小提示
+- **90% 自动压缩** — 上下文接近窗口上限时自动调用压缩 agent 摘要历史，UI 显示"压缩中…"
+- **跨 session 持久化** — 对话存 `~/.quill/contexts/<sha256>.json`，重启 Quill 自动恢复（含工具调用 / approval / Plan 痕迹）
+- **导出对话** — 一键把对话导成 markdown 笔记
+
+**系统**
 - **多窗口** — 每个文件 / 文件夹独立窗口；最后一个窗口关闭时退出
 - **macOS 原生集成** — 隐藏式标题栏、`.md` 文件关联、Finder「打开方式」可选
 - **Light / Dark / 跟随系统** — 全程基于 CSS 变量，主题切换无闪烁
+- **API key 加密存储** — 走系统 keychain (macOS Keychain / Windows DPAPI)，不写明文
 
-> 当前阶段：v0 工程骨架与核心编辑预览已落地，更多能力按 [docs/ui-design.md](docs/ui-design.md) 的 Roadmap 推进。
+---
+
+## 截图
+
+### 编辑 + 预览 + 大纲
+
+![分栏 + 大纲](docs/screenshots/editor-split.png)
+
+### Agent 协作中
+
+![Agent 面板](docs/screenshots/editor-with-agent.png)
+
+> 当前阶段：核心编辑预览 + AI Agent 已落地，按 [docs/ui-design.md](docs/ui-design.md) 的 Roadmap 持续推进。
 
 ---
 
