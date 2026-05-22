@@ -23,6 +23,19 @@ import { itemsToMessages, type ConvItem } from '../lib/itemsToMessages'
 import { sanitizeItems } from '../lib/sanitizeItems'
 import { coerceUsage, sumUsage, formatTokens } from '../lib/usage'
 import { exportConversation } from '../lib/exportConversation'
+import { clampPanelWidth, PANEL_WIDTH_DEFAULT } from '../lib/panelWidth'
+
+const PANEL_WIDTH_STORAGE_KEY = 'quill.agent.width'
+
+function readStoredWidth(): number {
+  try {
+    const raw = window.localStorage.getItem(PANEL_WIDTH_STORAGE_KEY)
+    if (!raw) return PANEL_WIDTH_DEFAULT
+    return clampPanelWidth(parseInt(raw, 10))
+  } catch {
+    return PANEL_WIDTH_DEFAULT
+  }
+}
 import type {
   AgentEvent,
   AgentMode,
@@ -562,8 +575,57 @@ export function AgentPanel({ onClose }: Props) {
     await ipc.writeFile(target, md)
   }, [items, scope])
 
+  // Resizable width — pointer drag on the left edge handle. Persisted to
+  // localStorage so the user's preferred width survives restarts. Drag
+  // anchor is right-side (panel sits at the right of the window), so
+  // dragging LEFT widens and RIGHT narrows.
+  const [width, setWidth] = useState<number>(() => readStoredWidth())
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(width))
+    } catch {
+      /* localStorage may be unavailable — best-effort */
+    }
+  }, [width])
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const handleResizeStart = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      dragRef.current = { startX: e.clientX, startW: width }
+      setDragging(true)
+      e.currentTarget.setPointerCapture(e.pointerId)
+    },
+    [width]
+  )
+  const handleResizeMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current
+    if (!d) return
+    setWidth(clampPanelWidth(d.startW + (d.startX - e.clientX)))
+  }, [])
+  const handleResizeEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return
+    dragRef.current = null
+    setDragging(false)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }, [])
+
   return (
-    <aside className="w-[360px] shrink-0 border-l border-[var(--rule)] bg-[var(--paper-dim)] flex flex-col">
+    <aside
+      className="shrink-0 border-l border-[var(--rule)] bg-[var(--paper-dim)] flex flex-col relative"
+      style={{ width: `${width}px` }}
+    >
+      <div
+        onPointerDown={handleResizeStart}
+        onPointerMove={handleResizeMove}
+        onPointerUp={handleResizeEnd}
+        onPointerCancel={handleResizeEnd}
+        className={`absolute left-0 top-0 bottom-0 w-1 -translate-x-1/2 cursor-col-resize z-10 ${
+          dragging ? 'bg-[var(--accent)]/40' : 'hover:bg-[var(--accent)]/30'
+        } transition-colors`}
+        title="拖动调整宽度"
+      />
       <header className="h-11 px-4 flex items-center gap-2 border-b border-[var(--rule)] shrink-0 bg-[var(--paper)]">
         <span className="font-display italic text-[14px] text-[var(--ink)]">
           Agent
