@@ -67,8 +67,12 @@ function scopeLabel(scope: Scope | null): string {
 }
 
 export function AgentPanel({ onClose }: Props) {
-  const { state } = useApp()
+  const { state, reloadCurrentFile } = useApp()
   const cur = state.currentFile
+  // Snapshot the current file path through a ref so the event handler closure
+  // (set once on mount) always reads the latest value without re-subscribing.
+  const curPathRef = useRef<string | null>(null)
+  curPathRef.current = cur?.path ?? null
 
   const scope = useMemo(
     () => computeScope(state.workspace?.rootPath, cur?.path ?? null, !!cur),
@@ -167,6 +171,14 @@ export function AgentPanel({ onClose }: Props) {
         // (e.g. fs failure post-approval) or a final path. If no approval card
         // exists (pre-approval scope/exists error), surface as a plain result.
         if (WRITE_TOOL_NAMES.has(event.name)) {
+          // If the agent wrote the file currently open in the editor, the
+          // editor's in-memory buffer is now stale — re-read from disk so
+          // the change is visible. Done outside the setItems reducer to keep
+          // the reducer pure.
+          const wr = event.result as { ok?: boolean; path?: string } | undefined
+          if (wr?.ok === true && wr.path && wr.path === curPathRef.current) {
+            void reloadCurrentFile(wr.path)
+          }
           const idx = prev.findIndex(
             (it) => it.kind === 'approval' && it.toolCallId === event.toolCallId
           )
