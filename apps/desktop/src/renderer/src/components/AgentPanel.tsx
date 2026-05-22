@@ -784,7 +784,7 @@ export function AgentPanel({ onClose }: Props) {
     const defaultName = `agent-${tail}-${today}.md`
     const target = await ipc.saveFileDialog(defaultName)
     if (!target) return
-    await ipc.writeFile(target, md)
+    await ipc.vault.write(target, md)
   }, [items, scope])
 
   // Resizable width — pointer drag on the left edge handle. Persisted to

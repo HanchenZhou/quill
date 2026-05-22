@@ -123,6 +123,6 @@ export async function exportToHtml(args: ExportArgs): Promise<string | null> {
     { name: 'HTML', extensions: ['html', 'htm'] }
   ])
   if (!path) return null
-  await ipc.writeFile(path, html)
+  await ipc.vault.write(path, html)
   return path
 }

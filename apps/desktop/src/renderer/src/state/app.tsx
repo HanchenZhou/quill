@@ -225,14 +225,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   prefsRef.current = prefs
 
   const openFolderAt = useCallback(async (rootPath: string) => {
-    const tree = await ipc.listDir(rootPath)
+    const tree = await ipc.vault.list(rootPath)
     const rootName = rootPath.split(/[/\\]/).filter(Boolean).pop() ?? rootPath
     dispatch({ type: 'OPEN_WORKSPACE', rootPath, rootName, tree })
     addRecent({ type: 'folder', path: rootPath, name: rootName })
   }, [])
 
   const openFileAt = useCallback(async (path: string) => {
-    const content = await ipc.readFile(path)
+    const content = await ipc.vault.read(path)
     dispatch({
       type: 'OPEN_FILE',
       path,
@@ -346,7 +346,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const snapshot = cur.buffer
     dispatch({ type: 'BEGIN_SAVE' })
     try {
-      await ipc.writeFile(path!, snapshot)
+      await ipc.vault.write(path!, snapshot)
       dispatch({ type: 'END_SAVE', path: path!, content: snapshot })
       if (isFirstSave) {
         const name = path!.split(/[/\\]/).pop() ?? path!
@@ -367,7 +367,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // resolves, the user may have switched files.
     const cur = stateRef.current.currentFile
     if (!cur || cur.path !== path) return
-    const content = await ipc.readFile(path)
+    const content = await ipc.vault.read(path)
     if (stateRef.current.currentFile?.path !== path) return
     dispatch({ type: 'RELOAD_CURRENT_FILE', path, content })
   }, [])
@@ -379,7 +379,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const ws = stateRef.current.workspace
     if (!ws) return
     const rootAtCall = ws.rootPath
-    const tree = await ipc.listDir(rootAtCall)
+    const tree = await ipc.vault.list(rootAtCall)
     if (stateRef.current.workspace?.rootPath !== rootAtCall) return
     dispatch({ type: 'REFRESH_TREE', tree })
   }, [])
@@ -390,7 +390,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const result = validateRenameTarget(cur.path, newName)
     if (!result.ok) throw new Error(result.error)
     if (result.newPath === cur.path) return // no-op
-    await ipc.renameFile(cur.path, result.newPath)
+    await ipc.vault.rename(cur.path, result.newPath)
     dispatch({
       type: 'RENAME_FILE',
       oldPath: cur.path,
