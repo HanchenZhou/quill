@@ -1,0 +1,31 @@
+# Quill self-hosted server example config.
+# Copy to config.yaml and fill in real values.
+
+server:
+  port: 3000
+  # base_url: "https://quill.example.com"   # optional; used for cookie domain
+
+auth:
+  # Generate with: bun run apps/server/scripts/hash-password.ts <your-password>
+  # Or pass via env var and use `${PASSWORD_HASH}` here.
+  password_hash: "$2a$12$REPLACE_WITH_BCRYPT_HASH"
+  # HMAC secret for signing session JWTs. Generate with `openssl rand -hex 32`.
+  session_secret: "${SESSION_SECRET}"
+  session_ttl_days: 30
+
+vault:
+  # Where markdown lives. In Docker, mount your data volume here.
+  path: /data/vault
+
+# Optional. Drop the whole section to disable AI features on the web UI.
+ai:
+  providers:
+    - id: openai
+      base_url: "https://api.openai.com/v1"
+      api_key: "${OPENAI_API_KEY}"
+      models: ["gpt-4o", "gpt-4o-mini"]
+    - id: anthropic
+      base_url: "https://api.anthropic.com"
+      api_key: "${ANTHROPIC_API_KEY}"
+      models: ["claude-opus-4-7", "claude-sonnet-4-6"]
+  default: "openai/gpt-4o-mini"
