@@ -98,9 +98,21 @@ export type AgentEvent =
   | { type: 'plan-complete'; plan: Plan }
   | { type: 'plan-usage'; usage: unknown }
   | { type: 'plan-approval-request'; plan: Plan }
+  | { type: 'compression-start' }
+  | { type: 'compression-complete'; summary: string; originalCount: number }
+  | { type: 'compression-error'; message: string }
   | { type: 'step-finish'; usage?: unknown }
   | { type: 'finish'; usage?: unknown; finishReason?: string }
   | { type: 'error'; message: string }
+
+export type CompressionRunArgs = {
+  providerId: string
+  modelId: string
+  messages: HistoryMessage[]
+  originalCount: number
+  lastInputTokens?: number
+  contextTokens?: number
+}
 
 const api = {
   platform: process.platform,
@@ -133,6 +145,8 @@ const api = {
     run: (args: { runId: string } & AgentRunArgs): Promise<void> =>
       ipcRenderer.invoke('agent:run', args),
     cancel: (runId: string): Promise<boolean> => ipcRenderer.invoke('agent:cancel', runId),
+    compress: (args: { runId: string } & CompressionRunArgs): Promise<void> =>
+      ipcRenderer.invoke('agent:compress', args),
     respondApproval: (args: {
       runId: string
       toolCallId: string

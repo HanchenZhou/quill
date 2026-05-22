@@ -2,6 +2,7 @@ import type {
   AgentEvent,
   AgentRunArgs,
   ApprovalResponse,
+  CompressionRunArgs,
   FileNode,
   MenuCommand,
   PlanApprovalResponse,
@@ -47,6 +48,8 @@ export const ipc = {
     run: (args: { runId: string } & AgentRunArgs): Promise<void> =>
       window.quill.agent.run(args),
     cancel: (runId: string): Promise<boolean> => window.quill.agent.cancel(runId),
+    compress: (args: { runId: string } & CompressionRunArgs): Promise<void> =>
+      window.quill.agent.compress(args),
     respondApproval: (args: {
       runId: string
       toolCallId: string

@@ -42,6 +42,18 @@ export type ConvItem =
     }
   | { kind: 'route'; decision: unknown }
   | { kind: 'phase-divider'; phase: 'plan' | 'build' }
+  | {
+      kind: 'compressed-summary'
+      /** Summary text from the compression agent. Rendered as markdown
+       *  in the panel; replayed to future runs as a synthetic assistant
+       *  message prefixed with "[Summary of earlier conversation: …]". */
+      summary: string
+      /** How many items were folded into this summary. */
+      originalCount: number
+      /** Token count at the time compression was triggered (for logging
+       *  / debug surfaces). Optional. */
+      atTokens?: number
+    }
   | { kind: 'error'; message: string }
   | { kind: 'finish'; usage?: unknown }
   | { kind: 'plan-usage'; usage: unknown }
@@ -177,12 +189,28 @@ export function itemsToMessages(items: ConvItem[]): Message[] {
         break
       }
 
+      case 'compressed-summary': {
+        // Materialize as its own assistant message. Don't merge into the
+        // assistant buffer — it represents a completed turn (the prior
+        // conversation summary) that the model should see as a discrete
+        // history item.
+        flushAssistant()
+        out.push({
+          role: 'assistant',
+          content:
+            `[Summary of earlier conversation (${item.originalCount} turns):]\n\n` +
+            item.summary
+        })
+        break
+      }
+
       // UI-only items — skipped intentionally.
       case 'plan':
       case 'route':
       case 'phase-divider':
       case 'error':
       case 'finish':
+      case 'plan-usage':
       case 'truncated':
         break
     }

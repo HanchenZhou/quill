@@ -104,6 +104,18 @@ export type AgentEvent =
   | { type: 'plan-complete'; plan: Plan }
   | { type: 'plan-usage'; usage: unknown }
   | { type: 'plan-approval-request'; plan: Plan }
+  | { type: 'compression-start' }
+  | { type: 'compression-complete'; summary: string; originalCount: number }
+  | { type: 'compression-error'; message: string }
   | { type: 'step-finish'; usage?: unknown }
   | { type: 'finish'; usage?: unknown; finishReason?: string }
   | { type: 'error'; message: string }
+
+export type CompressionRunArgs = {
+  providerId: string
+  modelId: string
+  messages: HistoryMessage[]
+  originalCount: number
+  lastInputTokens?: number
+  contextTokens?: number
+}

@@ -31,6 +31,8 @@ import {
   type AvailableModel,
   type ModelChoice
 } from '../lib/availableModels'
+import { shouldCompress, splitForCompression } from '../lib/compressionTrigger'
+import { getProviderModel } from '../lib/providers'
 import type {
   AgentEvent,
   AgentMode,
@@ -39,6 +41,9 @@ import type {
   RouteDecision,
   Scope
 } from '../types'
+
+const COMPRESSION_THRESHOLD = 0.9
+const KEEP_RECENT_TURNS = 6
 
 const PANEL_WIDTH_STORAGE_KEY = 'quill.agent.width'
 const PLAN_CHOICE_STORAGE_KEY = 'quill.agent.planModel'
@@ -124,6 +129,12 @@ type Item =
   | { kind: 'phase-divider'; phase: 'plan' | 'build' }
   | { kind: 'truncated'; count: number }
   | { kind: 'plan-usage'; usage: unknown }
+  | {
+      kind: 'compressed-summary'
+      summary: string
+      originalCount: number
+      atTokens?: number
+    }
   | { kind: 'error'; message: string }
   | { kind: 'finish'; usage?: unknown }
 
@@ -190,6 +201,11 @@ export function AgentPanel({ onClose }: Props) {
   const [items, setItems] = useState<Item[]>([])
   const [busy, setBusy] = useState(false)
   const [runId, setRunId] = useState<string | null>(null)
+  // Compression is a side-band run that triggers automatically after a
+  // normal finish event when last usage crosses the threshold. We
+  // surface its status to the UI ("压缩中…") via a flag rather than
+  // mixing it into the main `busy` so the user can keep typing.
+  const [compressing, setCompressing] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Resolve the default provider + full configured list on mount.
@@ -426,6 +442,29 @@ export function AgentPanel({ onClose }: Props) {
       if (event.type === 'plan-usage') {
         return [...prev, { kind: 'plan-usage', usage: event.usage }]
       }
+      if (event.type === 'compression-start') {
+        // Indicator is driven by the `compressing` flag set outside the
+        // reducer; nothing to add to items[].
+        return prev
+      }
+      if (event.type === 'compression-complete') {
+        // Splice prefix → single summary item, keep tail (which includes
+        // any items the user added while compression was in flight).
+        const pending = pendingCompressionRef.current
+        pendingCompressionRef.current = null
+        if (!pending || prev.length < pending.originalCount) return prev
+        const summary: Item = {
+          kind: 'compressed-summary',
+          summary: event.summary,
+          originalCount: pending.originalCount,
+          atTokens: pending.atTokens
+        }
+        return [summary, ...prev.slice(pending.originalCount)]
+      }
+      if (event.type === 'compression-error') {
+        pendingCompressionRef.current = null
+        return [...prev, { kind: 'error', message: '压缩失败: ' + event.message }]
+      }
       if (event.type === 'error') {
         return [...prev, { kind: 'error', message: event.message }]
       }
@@ -437,6 +476,10 @@ export function AgentPanel({ onClose }: Props) {
     if (event.type === 'finish' || event.type === 'error') {
       setBusy(false)
       setRunId(null)
+    }
+    if (event.type === 'compression-start') setCompressing(true)
+    if (event.type === 'compression-complete' || event.type === 'compression-error') {
+      setCompressing(false)
     }
   }
 
@@ -457,6 +500,67 @@ export function AgentPanel({ onClose }: Props) {
     }, 400)
     return () => window.clearTimeout(t)
   }, [items, scope])
+
+  // Compression trigger: after every items[] update, if the most recent
+  // finish event with usage crosses the threshold against the Build model's
+  // context window, fire a compression run. The pendingCompressionRef
+  // remembers how many items were submitted so the splice on
+  // compression-complete only replaces the right prefix.
+  const pendingCompressionRef = useRef<{ originalCount: number; atTokens?: number } | null>(
+    null
+  )
+  useEffect(() => {
+    if (compressing) return
+    if (pendingCompressionRef.current) return // already in flight
+    if (!provider) return
+    // Find the most recent finish item (skip nothing — only finish carries
+    // the input/output usage we need).
+    let lastFinishUsage: ReturnType<typeof coerceUsage> = undefined
+    for (let i = items.length - 1; i >= 0; i--) {
+      if (items[i].kind === 'finish') {
+        lastFinishUsage = coerceUsage(
+          (items[i] as Extract<Item, { kind: 'finish' }>).usage
+        )
+        break
+      }
+    }
+    if (!lastFinishUsage) return
+
+    // Use the effective Build model (override or default) for the context-
+    // window check + the compression call itself.
+    const effBuildProvider = buildChoice?.providerId ?? provider.id
+    const effBuildModelId = buildChoice?.modelId ?? provider.model
+    const modelInfo = getProviderModel(effBuildProvider, effBuildModelId)
+    if (!modelInfo) return // unknown model → no contextTokens → skip
+
+    if (!shouldCompress(lastFinishUsage, modelInfo.contextTokens, COMPRESSION_THRESHOLD)) {
+      return
+    }
+
+    const { toCompress } = splitForCompression(
+      items as unknown as ConvItem[],
+      KEEP_RECENT_TURNS
+    )
+    if (toCompress.length === 0) return // not enough older turns to summarize
+
+    const messages = itemsToMessages(toCompress)
+    if (messages.length === 0) return
+
+    const compressionRunId = `compress-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    pendingCompressionRef.current = {
+      originalCount: toCompress.length,
+      atTokens: lastFinishUsage.total
+    }
+    void ipc.agent.compress({
+      runId: compressionRunId,
+      providerId: effBuildProvider,
+      modelId: effBuildModelId,
+      messages,
+      originalCount: toCompress.length,
+      lastInputTokens: lastFinishUsage.input,
+      contextTokens: modelInfo.contextTokens
+    })
+  }, [items, compressing, provider, buildChoice])
 
   const canRun = !!scope && !!provider && !busy && input.trim().length > 0
   const canCancel = busy && runId !== null
@@ -769,6 +873,12 @@ export function AgentPanel({ onClose }: Props) {
             </span>
           </>
         )}
+        {compressing && (
+          <span className={`flex items-center gap-1 ${totalUsage.total > 0 ? '' : 'ml-auto'} text-[var(--accent)] font-serif-zh italic`}>
+            <Loader2 className="w-3 h-3 animate-spin" />
+            压缩中…
+          </span>
+        )}
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-auto px-4 py-3 space-y-3">
@@ -899,6 +1009,9 @@ function ItemView({
         — 之前 {item.count} 条已截断 —
       </div>
     )
+  }
+  if (item.kind === 'compressed-summary') {
+    return <CompressedSummaryView item={item} />
   }
   if (item.kind === 'assistant-text') {
     return <AssistantText text={item.text} />
@@ -1495,6 +1608,40 @@ function PickerRow({
           </option>
         ))}
       </select>
+    </div>
+  )
+}
+
+function CompressedSummaryView({
+  item
+}: {
+  item: Extract<Item, { kind: 'compressed-summary' }>
+}) {
+  const [open, setOpen] = useState(false)
+  const html = useMemo(() => renderMd(item.summary), [item.summary])
+  return (
+    <div className="rounded-md border border-[var(--rule)] bg-[var(--paper)] overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="no-drag w-full px-3 py-2 flex items-center gap-2 text-[11px] bg-[var(--paper-soft)] border-b border-[var(--rule-soft)] hover:bg-[var(--paper)] transition text-left"
+      >
+        {open ? (
+          <ChevronDown className="w-3 h-3 text-[var(--ink-faint)]" />
+        ) : (
+          <ChevronRight className="w-3 h-3 text-[var(--ink-faint)]" />
+        )}
+        <span className="font-serif-zh italic text-[var(--ink-soft)]">
+          之前 {item.originalCount} 条对话已压缩
+        </span>
+        {item.atTokens && (
+          <span className="ml-auto font-mono text-[var(--ink-faint)]">
+            @ {formatTokens(item.atTokens)} tokens
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="px-3 py-2 prose-agent" dangerouslySetInnerHTML={{ __html: html }} />
+      )}
     </div>
   )
 }
