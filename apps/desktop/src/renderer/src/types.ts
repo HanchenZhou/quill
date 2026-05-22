@@ -42,10 +42,14 @@ export type AgentRunArgs = {
   currentSelection?: string
 }
 
+export type ApprovalPayload = Record<string, unknown>
+export type ApprovalResponse = { approved: boolean; reason?: string }
+
 export type AgentEvent =
   | { type: 'text-delta'; delta: string }
   | { type: 'tool-call'; toolCallId: string; name: string; args: unknown }
   | { type: 'tool-result'; toolCallId: string; name: string; result: unknown }
+  | { type: 'tool-approval-request'; toolCallId: string; payload: ApprovalPayload }
   | { type: 'step-finish'; usage?: unknown }
   | { type: 'finish'; usage?: unknown; finishReason?: string }
   | { type: 'error'; message: string }

@@ -16,8 +16,10 @@ import {
 import {
   runAgent,
   cancelRun,
+  respondApproval,
   type AgentRunArgs,
-  type AgentEvent
+  type AgentEvent,
+  type ApprovalResponse
 } from './agent'
 
 export type FileNode = {
@@ -210,6 +212,13 @@ export function registerIpc(): void {
     }
   )
   ipcMain.handle('agent:cancel', async (_evt, runId: string) => cancelRun(runId))
+  ipcMain.handle(
+    'agent:approval-respond',
+    async (
+      _evt,
+      args: { runId: string; toolCallId: string; response: ApprovalResponse }
+    ) => respondApproval(args.runId, args.toolCallId, args.response)
+  )
 
   ipcMain.handle(
     'dialog:confirmOpenChoice',

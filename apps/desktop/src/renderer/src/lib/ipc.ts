@@ -1,4 +1,10 @@
-import type { AgentEvent, AgentRunArgs, FileNode, MenuCommand } from '../types'
+import type {
+  AgentEvent,
+  AgentRunArgs,
+  ApprovalResponse,
+  FileNode,
+  MenuCommand
+} from '../types'
 
 export const ipc = {
   openFolderDialog: (): Promise<string | null> => window.quill.dialog.openFolder(),
@@ -39,6 +45,11 @@ export const ipc = {
     run: (args: { runId: string } & AgentRunArgs): Promise<void> =>
       window.quill.agent.run(args),
     cancel: (runId: string): Promise<boolean> => window.quill.agent.cancel(runId),
+    respondApproval: (args: {
+      runId: string
+      toolCallId: string
+      response: ApprovalResponse
+    }): Promise<boolean> => window.quill.agent.respondApproval(args),
     onEvent: (cb: (payload: { runId: string; event: AgentEvent }) => void) =>
       window.quill.agent.onEvent(cb)
   },

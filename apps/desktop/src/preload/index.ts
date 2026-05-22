@@ -37,10 +37,14 @@ export type AgentRunArgs = {
   currentSelection?: string
 }
 
+export type ApprovalPayload = Record<string, unknown>
+export type ApprovalResponse = { approved: boolean; reason?: string }
+
 export type AgentEvent =
   | { type: 'text-delta'; delta: string }
   | { type: 'tool-call'; toolCallId: string; name: string; args: unknown }
   | { type: 'tool-result'; toolCallId: string; name: string; result: unknown }
+  | { type: 'tool-approval-request'; toolCallId: string; payload: ApprovalPayload }
   | { type: 'step-finish'; usage?: unknown }
   | { type: 'finish'; usage?: unknown; finishReason?: string }
   | { type: 'error'; message: string }
@@ -76,6 +80,11 @@ const api = {
     run: (args: { runId: string } & AgentRunArgs): Promise<void> =>
       ipcRenderer.invoke('agent:run', args),
     cancel: (runId: string): Promise<boolean> => ipcRenderer.invoke('agent:cancel', runId),
+    respondApproval: (args: {
+      runId: string
+      toolCallId: string
+      response: ApprovalResponse
+    }): Promise<boolean> => ipcRenderer.invoke('agent:approval-respond', args),
     onEvent(cb: (payload: { runId: string; event: AgentEvent }) => void): () => void {
       const handler = (_: unknown, payload: { runId: string; event: AgentEvent }): void =>
         cb(payload)

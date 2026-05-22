@@ -3,8 +3,10 @@ import { makeModel } from './providers'
 import { makeTools } from './tools'
 import { buildSystemPrompt } from './prompt'
 import type { Scope } from './scope'
+import { createApprovalsManager, type ApprovalPayload, type ApprovalResponse } from './approvals'
 
 export type { Scope } from './scope'
+export type { ApprovalPayload, ApprovalResponse } from './approvals'
 export { buildSystemPrompt } from './prompt'
 
 export type AgentRunArgs = {
@@ -24,17 +26,31 @@ export type AgentEvent =
   | { type: 'text-delta'; delta: string }
   | { type: 'tool-call'; toolCallId: string; name: string; args: unknown }
   | { type: 'tool-result'; toolCallId: string; name: string; result: unknown }
+  | { type: 'tool-approval-request'; toolCallId: string; payload: ApprovalPayload }
   | { type: 'step-finish'; usage?: unknown }
   | { type: 'finish'; usage?: unknown; finishReason?: string }
   | { type: 'error'; message: string }
 
 const runs = new Map<string, AbortController>()
+const approvals = createApprovalsManager()
 
 export function cancelRun(runId: string): boolean {
   const c = runs.get(runId)
+  // Free any awaiting approval prompts so their tool calls return immediately.
+  // Done before abort() so the tool's `execute` has a chance to settle before
+  // streamText reports an aborted state.
+  approvals.cancelRun(runId)
   if (!c) return false
   c.abort()
   return true
+}
+
+export function respondApproval(
+  runId: string,
+  toolCallId: string,
+  response: ApprovalResponse
+): boolean {
+  return approvals.respond(runId, toolCallId, response)
 }
 
 export async function runAgent(
@@ -47,8 +63,17 @@ export async function runAgent(
 
   try {
     const model = await makeModel(args.providerId, args.modelId)
+    const requestApproval = (
+      toolCallId: string,
+      payload: ApprovalPayload
+    ): Promise<ApprovalResponse> => {
+      onEvent({ type: 'tool-approval-request', toolCallId, payload })
+      return approvals.request(runId, toolCallId, payload)
+    }
     const tools =
-      args.scope.kind === 'untitled' ? undefined : makeTools(args.scope)
+      args.scope.kind === 'untitled'
+        ? undefined
+        : makeTools(args.scope, requestApproval)
 
     const result = streamText({
       model,
@@ -129,6 +154,10 @@ export async function runAgent(
       })
     }
   } finally {
+    // Belt-and-suspenders: if the run exited with approvals still pending
+    // (shouldn't happen — streamText resolves only after tool execute does),
+    // clear them so the manager doesn't leak.
+    approvals.cancelRun(runId)
     runs.delete(runId)
   }
 }
