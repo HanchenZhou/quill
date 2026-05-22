@@ -8,6 +8,14 @@ import {
 } from 'react'
 import type { FileNode } from '@quill/shared-types'
 import type { VaultProvider } from '@quill/vault-adapter'
+import {
+  detectCollisions,
+  isMarkdownFile,
+  planUpload,
+  uploadFiles,
+  type UploadItem,
+  type UploadResult
+} from '../lib/upload'
 
 type TreeProps = {
   vault: VaultProvider
@@ -56,6 +64,20 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [actionsForPath, setActionsForPath] = useState<string | null>(null)
+  // Upload UI state. uploadTargetRef remembers which directory the next
+  // file-picker pick targets — set before triggering input.click().
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const uploadTargetRef = useRef<string>('')
+  const [pendingCollisions, setPendingCollisions] = useState<{
+    destDir: string
+    nonColliding: UploadItem[]
+    colliding: UploadItem[]
+  } | null>(null)
+  const [uploadStatus, setUploadStatus] = useState<
+    | null
+    | { phase: 'uploading'; done: number; total: number }
+    | { phase: 'done'; results: UploadResult[] }
+  >(null)
 
   // Reload helper: re-fetches a single directory's children. Empty string = root.
   const reloadDir = useCallback(
@@ -190,6 +212,62 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
     }
   }
 
+  function triggerUpload(destDir: string): void {
+    uploadTargetRef.current = destDir
+    setActionsForPath(null)
+    // Reset value so picking the same file twice in a row still fires
+    // onChange — browsers de-dupe identical paths otherwise.
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+      fileInputRef.current.click()
+    }
+  }
+
+  async function performUpload(items: UploadItem[]): Promise<void> {
+    if (items.length === 0) {
+      setPendingCollisions(null)
+      return
+    }
+    setPendingCollisions(null)
+    setUploadStatus({ phase: 'uploading', done: 0, total: items.length })
+    const results = await uploadFiles(vault, items, (done, total) => {
+      setUploadStatus({ phase: 'uploading', done, total })
+    })
+    setUploadStatus({ phase: 'done', results })
+    // Refresh every dir we touched (group by parent so we only re-fetch
+    // each affected dir once).
+    const dirs = new Set(items.map((i) => parentOf(i.destPath)))
+    await Promise.all([...dirs].map((d) => reloadDir(d)))
+    // Auto-clear the "done" toast after 3s.
+    window.setTimeout(() => {
+      setUploadStatus((cur) => (cur && cur.phase === 'done' ? null : cur))
+    }, 3000)
+  }
+
+  async function onFilesPicked(files: File[]): Promise<void> {
+    const destDir = uploadTargetRef.current
+    // Filter to markdown files. accept="" hints the picker but isn't
+    // enforced, so the user could still pick a .txt; quietly drop it.
+    const accepted = files.filter(isMarkdownFile)
+    if (accepted.length === 0) {
+      window.alert('请选择 .md / .markdown 文件')
+      return
+    }
+    const colliding = await detectCollisions(vault, destDir, accepted)
+    const collidingNames = new Set(colliding.map((c) => c.file.name))
+    const nonColliding = accepted
+      .filter((f) => !collidingNames.has(f.name))
+      .map((f) => ({
+        file: f,
+        destPath: destDir ? `${destDir}/${f.name}` : f.name
+      }))
+    if (colliding.length === 0) {
+      await performUpload(planUpload(destDir, accepted))
+      return
+    }
+    setPendingCollisions({ destDir, nonColliding, colliding })
+  }
+
   async function remove(node: FileNode): Promise<void> {
     setActionsForPath(null)
     const ok = window.confirm(
@@ -273,6 +351,9 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
           <RowMenu
             onClose={() => setActionsForPath(null)}
             actions={[
+              ...(node.isDirectory
+                ? [{ label: '上传到这里', onClick: () => triggerUpload(node.path) }]
+                : []),
               { label: '重命名', onClick: () => beginRename(node) },
               { label: '删除', onClick: () => void remove(node), danger: true }
             ]}
@@ -308,8 +389,28 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
           >
             📁+
           </button>
+          <button
+            type="button"
+            onClick={() => triggerUpload(currentDir())}
+            title="上传 .md 文件"
+            className="text-sm text-[var(--ink-faint)] hover:text-[var(--ink)] hover:bg-[var(--paper-soft)] rounded px-1.5 py-0.5"
+          >
+            📤
+          </button>
         </div>
       </header>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".md,.markdown,.mdown,.mkd,text/markdown"
+        multiple
+        hidden
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? [])
+          if (files.length === 0) return
+          void onFilesPicked(files)
+        }}
+      />
       {root.status === 'loading' ? (
         <div className="text-xs text-[var(--ink-faint)] p-3">加载中…</div>
       ) : root.status === 'error' ? (
@@ -319,9 +420,135 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
           {root.entries.map((e) => renderRow(e, 0))}
         </nav>
       )}
+
+      {uploadStatus && <UploadStatusBar status={uploadStatus} />}
+
+      {pendingCollisions && (
+        <CollisionDialog
+          destDir={pendingCollisions.destDir}
+          nonColliding={pendingCollisions.nonColliding}
+          colliding={pendingCollisions.colliding}
+          onCancel={() => setPendingCollisions(null)}
+          onSkipColliding={() => void performUpload(pendingCollisions.nonColliding)}
+          onOverwriteAll={() =>
+            void performUpload([
+              ...pendingCollisions.nonColliding,
+              ...pendingCollisions.colliding
+            ])
+          }
+        />
+      )}
     </div>
   )
 })
+
+function UploadStatusBar({
+  status
+}: {
+  status:
+    | { phase: 'uploading'; done: number; total: number }
+    | { phase: 'done'; results: UploadResult[] }
+}): JSX.Element {
+  if (status.phase === 'uploading') {
+    return (
+      <div className="px-3 py-1.5 text-xs text-[var(--ink-soft)] border-t border-[var(--rule-soft)] bg-[var(--paper-dim)]">
+        上传中 {status.done}/{status.total}…
+      </div>
+    )
+  }
+  const ok = status.results.filter((r) => r.ok).length
+  const fail = status.results.length - ok
+  return (
+    <div
+      className={[
+        'px-3 py-1.5 text-xs border-t border-[var(--rule-soft)]',
+        fail > 0 ? 'text-[var(--accent)] bg-[var(--accent-soft)]' : 'text-[var(--ink-soft)] bg-[var(--paper-dim)]'
+      ].join(' ')}
+      title={status.results.filter((r) => !r.ok).map((r) => `${r.destPath}: ${r.error}`).join('\n')}
+    >
+      ✓ 上传 {ok} 个{fail > 0 ? `，失败 ${fail} 个` : ''}
+    </div>
+  )
+}
+
+function CollisionDialog({
+  destDir,
+  nonColliding,
+  colliding,
+  onCancel,
+  onSkipColliding,
+  onOverwriteAll
+}: {
+  destDir: string
+  nonColliding: UploadItem[]
+  colliding: UploadItem[]
+  onCancel: () => void
+  onSkipColliding: () => void
+  onOverwriteAll: () => void
+}): JSX.Element {
+  const dirLabel = destDir || '根目录'
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--ink)]/30 backdrop-blur-[2px]"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-md rounded-xl bg-[var(--paper)] border border-[var(--rule)] shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-[var(--rule)]">
+          <h3 className="font-display text-lg text-[var(--ink)]" style={{ fontWeight: 500 }}>
+            文件已存在
+          </h3>
+          <p className="text-xs text-[var(--ink-faint)] mt-1">
+            目标目录：<span className="font-mono">{dirLabel}</span>
+          </p>
+        </div>
+        <div className="px-5 py-3 space-y-3 text-sm">
+          <p className="text-[var(--ink-soft)]">
+            以下 {colliding.length} 个文件在目标目录中已存在：
+          </p>
+          <ul className="font-mono text-xs text-[var(--ink)] bg-[var(--paper-dim)] rounded p-2 max-h-32 overflow-y-auto">
+            {colliding.map((c) => (
+              <li key={c.file.name}>· {c.file.name}</li>
+            ))}
+          </ul>
+          {nonColliding.length > 0 && (
+            <p className="text-xs text-[var(--ink-faint)]">
+              另有 {nonColliding.length} 个文件不冲突，将正常上传。
+            </p>
+          )}
+        </div>
+        <div className="px-5 py-3 bg-[var(--paper-dim)] border-t border-[var(--rule)] flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-3 py-1 text-xs text-[var(--ink-soft)] hover:bg-[var(--paper-soft)] rounded"
+          >
+            取消
+          </button>
+          <div className="flex-1" />
+          {nonColliding.length > 0 && (
+            <button
+              type="button"
+              onClick={onSkipColliding}
+              className="px-3 py-1 text-xs text-[var(--ink-soft)] hover:bg-[var(--paper-soft)] rounded border border-[var(--rule)]"
+            >
+              仅传不冲突的（{nonColliding.length}）
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onOverwriteAll}
+            className="px-3 py-1 rounded bg-[var(--accent)] text-[var(--paper)] text-xs font-medium hover:opacity-90"
+          >
+            全部覆盖
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function RenameInput({
   value,
