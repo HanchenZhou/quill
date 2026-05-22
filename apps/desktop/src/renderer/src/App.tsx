@@ -8,6 +8,7 @@ import { EmptyState } from './components/EmptyState'
 import { StatusBar } from './components/StatusBar'
 import { DragOverlay } from './components/DragOverlay'
 import { AgentPanel } from './components/AgentPanel'
+import { OpenChoiceDialog } from './components/OpenChoiceDialog'
 
 const AGENT_OPEN_KEY = 'quill.agent.open'
 
@@ -20,7 +21,7 @@ function readAgentOpen(): boolean {
 }
 
 function Shell() {
-  const { state, mode, save } = useApp()
+  const { state, mode, save, openChoiceRequest } = useApp()
   const [agentOpen, setAgentOpen] = useState<boolean>(() => readAgentOpen())
 
   useEffect(() => {
@@ -62,6 +63,12 @@ function Shell() {
 
       <StatusBar />
       <DragOverlay />
+      {openChoiceRequest && (
+        <OpenChoiceDialog
+          request={openChoiceRequest}
+          onResolve={openChoiceRequest.resolve}
+        />
+      )}
     </div>
   )
 }

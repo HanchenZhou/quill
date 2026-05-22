@@ -6,6 +6,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   type ReactNode
 } from 'react'
 import type { FileNode, ViewMode } from '../types'
@@ -18,6 +19,15 @@ type Workspace = {
   rootPath: string
   rootName: string
   tree: FileNode[]
+}
+
+export type OpenChoiceRequest = {
+  candidateName: string
+  currentName: string
+  dirty: boolean
+  /** Resolver — the OpenChoiceDialog calls this with the user's choice
+   *  (or 'cancel' on dismiss). State clears once resolved. */
+  resolve: (choice: 'new' | 'current' | 'cancel') => void
 }
 
 type CurrentFile = {
@@ -196,6 +206,9 @@ type Ctx = {
    *  after the agent creates / writes files so newly-created entries appear
    *  immediately. No-op outside workspace mode. */
   reloadWorkspaceTree: () => Promise<void>
+  /** Current pending "open in new window?" prompt, or null. The
+   *  OpenChoiceDialog at the App root renders + resolves this. */
+  openChoiceRequest: OpenChoiceRequest | null
 }
 
 const AppContext = createContext<Ctx | null>(null)
@@ -236,6 +249,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'NEW_FILE', viewMode: prefsRef.current.defaultViewMode })
   }, [])
 
+  // Renderer-side prompt state replacing the old native sheet via
+  // `dialog:confirmOpenChoice`. `openPathWithPrompt` parks a promise in
+  // `openChoiceRequest`; the `OpenChoiceDialog` at the App root resolves
+  // it on button click and clears the state via the callback we attach.
+  const [openChoiceRequest, setOpenChoiceRequest] = useState<OpenChoiceRequest | null>(
+    null
+  )
+
+  const askOpenChoice = useCallback(
+    (candidateName: string, currentName: string, dirty: boolean) =>
+      new Promise<'new' | 'current' | 'cancel'>((resolve) => {
+        setOpenChoiceRequest({
+          candidateName,
+          currentName,
+          dirty,
+          resolve: (choice) => {
+            setOpenChoiceRequest(null)
+            resolve(choice)
+          }
+        })
+      }),
+    []
+  )
+
   const openPathWithPrompt = useCallback(
     async (target: { filePath?: string; folderPath?: string; newFile?: boolean }) => {
       const cur = stateRef.current.currentFile
@@ -254,11 +291,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const currentName = cur.path
         ? (cur.path.split(/[/\\]/).pop() ?? '未命名')
         : 'Untitled'
-      const choice = await ipc.confirmOpenChoice({
+      const choice = await askOpenChoice(
         candidateName,
         currentName,
-        dirty: isDirty(stateRef.current)
-      })
+        isDirty(stateRef.current)
+      )
       if (choice === 'cancel') return
       if (choice === 'new') {
         await ipc.openInNewWindow(target)
@@ -269,7 +306,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       else if (target.folderPath) await openFolderAt(target.folderPath)
       else if (target.newFile) newFileInCurrent()
     },
-    [openFileAt, openFolderAt, newFileInCurrent]
+    [openFileAt, openFolderAt, newFileInCurrent, askOpenChoice]
   )
 
   const openFolder = useCallback(async () => {
@@ -411,7 +448,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toggleSidebar,
       renameCurrentFile,
       reloadCurrentFile,
-      reloadWorkspaceTree
+      reloadWorkspaceTree,
+      openChoiceRequest
     }),
     [
       state,
@@ -428,7 +466,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toggleSidebar,
       renameCurrentFile,
       reloadCurrentFile,
-      reloadWorkspaceTree
+      reloadWorkspaceTree,
+      openChoiceRequest
     ]
   )
 
