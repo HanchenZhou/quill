@@ -5,13 +5,13 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: ['@quill/agent', '@quill/shared-types', '@quill/vault-adapter'] })],
     build: {
       outDir: 'out/main'
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: ['@quill/agent', '@quill/shared-types', '@quill/vault-adapter'] })],
     build: {
       outDir: 'out/preload'
     }

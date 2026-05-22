@@ -2,7 +2,7 @@ import { safeStorage } from 'electron'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import { migrateModelId } from './agent/providers'
+import { migrateModelId } from '@quill/agent'
 
 /**
  * Storage layout under ~/.quill/:

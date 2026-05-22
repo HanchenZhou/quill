@@ -19,6 +19,7 @@
         "@codemirror/state": "^6.6.0",
         "@codemirror/theme-one-dark": "^6.1.3",
         "@codemirror/view": "^6.43.0",
+        "@quill/agent": "workspace:*",
         "@quill/shared-types": "workspace:*",
         "@quill/vault-adapter": "workspace:*",
         "ai": "^6.0.190",
@@ -46,6 +47,22 @@
         "tailwindcss": "^4.0.0",
         "typescript": "^5.6.3",
         "vite": "^5.4.11",
+      },
+    },
+    "packages/agent": {
+      "name": "@quill/agent",
+      "version": "0.0.1",
+      "dependencies": {
+        "@ai-sdk/anthropic": "^3.0.78",
+        "@ai-sdk/openai-compatible": "^2.0.47",
+        "@quill/shared-types": "workspace:*",
+        "ai": "^6.0.190",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.3.14",
+        "@types/node": "^22.10.0",
+        "typescript": "^5.6.3",
       },
     },
     "packages/shared-types": {
@@ -308,6 +325,8 @@
     "@opentelemetry/api": ["@opentelemetry/api@1.9.1", "https://registry.npmmirror.com/@opentelemetry/api/-/api-1.9.1.tgz", {}, "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q=="],
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "https://registry.npmmirror.com/@pkgjs/parseargs/-/parseargs-0.11.0.tgz", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
+
+    "@quill/agent": ["@quill/agent@workspace:packages/agent"],
 
     "@quill/desktop": ["@quill/desktop@workspace:apps/desktop"],
 
