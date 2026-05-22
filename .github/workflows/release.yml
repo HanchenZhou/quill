@@ -60,7 +60,11 @@ jobs:
         run: bun test
 
       - name: Build macOS arm64 dmg
-        run: bun run dist:mac:arm64
+        # The dist:mac:arm64 script lives in apps/desktop/package.json,
+        # not the root. From repo root we have to address the workspace
+        # explicitly — `bun run dist:mac:arm64` at root would just fail
+        # with "Script not found".
+        run: bun --filter @quill/desktop dist:mac:arm64
         env:
           # Skip code-signing for v1 — Apple Developer ID notarization isn't
           # set up. electron-builder respects CSC_IDENTITY_AUTO_DISCOVERY=false.
