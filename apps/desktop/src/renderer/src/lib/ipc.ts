@@ -34,5 +34,16 @@ export const ipc = {
     window.quill.events.onMenuCommand(cb),
   exportPdf: (args: { html: string; defaultName: string }): Promise<string | null> =>
     window.quill.exportPdf(args),
-  revealInFolder: (path: string): Promise<void> => window.quill.shell.reveal(path)
+  revealInFolder: (path: string): Promise<void> => window.quill.shell.reveal(path),
+  providers: {
+    list: () => window.quill.providers.list(),
+    upsert: (args: { id: string; key: string; model: string }) =>
+      window.quill.providers.upsert(args),
+    updateModel: (args: { id: string; model: string }) =>
+      window.quill.providers.updateModel(args),
+    remove: (id: string) => window.quill.providers.remove(id),
+    test: (baseURL: string) => window.quill.providers.test(baseURL),
+    getDefault: () => window.quill.providers.getDefault(),
+    setDefault: (id: string | null) => window.quill.providers.setDefault(id)
+  }
 }

@@ -3,8 +3,9 @@ import { ThemeProvider } from '../state/theme'
 import { PrefsProvider } from '../state/prefs'
 import { GeneralPanel } from './panels/GeneralPanel'
 import { HelpPanel } from './panels/HelpPanel'
+import { ProvidersPanel } from './panels/ProvidersPanel'
 
-type SectionId = 'general' | 'help'
+type SectionId = 'general' | 'providers' | 'help'
 
 type Section = {
   id: SectionId
@@ -14,6 +15,7 @@ type Section = {
 
 const SECTIONS: Section[] = [
   { id: 'general', label: '通用', hint: 'general' },
+  { id: 'providers', label: '大模型供应商', hint: 'AI providers' },
   { id: 'help', label: '帮助', hint: 'help · about' }
 ]
 
@@ -64,6 +66,7 @@ function SettingsShell() {
         {/* Content */}
         <main className="flex-1 overflow-auto px-10 py-8 min-w-0">
           {active === 'general' && <GeneralPanel />}
+          {active === 'providers' && <ProvidersPanel />}
           {active === 'help' && <HelpPanel />}
         </main>
       </div>
