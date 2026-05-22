@@ -23,6 +23,28 @@ export type MenuCommand =
   | 'close-folder'
   | 'export-pdf'
 
+export type Scope =
+  | { kind: 'workspace'; root: string }
+  | { kind: 'single-file'; path: string }
+  | { kind: 'untitled' }
+
+export type AgentRunArgs = {
+  providerId: string
+  modelId: string
+  prompt: string
+  scope: Scope
+  currentBuffer?: string
+  currentSelection?: string
+}
+
+export type AgentEvent =
+  | { type: 'text-delta'; delta: string }
+  | { type: 'tool-call'; toolCallId: string; name: string; args: unknown }
+  | { type: 'tool-result'; toolCallId: string; name: string; result: unknown }
+  | { type: 'step-finish'; usage?: unknown }
+  | { type: 'finish'; usage?: unknown; finishReason?: string }
+  | { type: 'error'; message: string }
+
 const api = {
   platform: process.platform,
   versions: process.versions,
@@ -49,6 +71,19 @@ const api = {
     }): Promise<void> => ipcRenderer.invoke('app:openInNewWindow', args),
     openSettings: (): Promise<void> => ipcRenderer.invoke('app:openSettings'),
     version: (): Promise<string> => ipcRenderer.invoke('app:version')
+  },
+  agent: {
+    run: (args: { runId: string } & AgentRunArgs): Promise<void> =>
+      ipcRenderer.invoke('agent:run', args),
+    cancel: (runId: string): Promise<boolean> => ipcRenderer.invoke('agent:cancel', runId),
+    onEvent(cb: (payload: { runId: string; event: AgentEvent }) => void): () => void {
+      const handler = (_: unknown, payload: { runId: string; event: AgentEvent }): void =>
+        cb(payload)
+      ipcRenderer.on('agent:event', handler)
+      return () => {
+        ipcRenderer.off('agent:event', handler)
+      }
+    }
   },
   providers: {
     list: (): Promise<Array<{ id: string; model: string; addedAt: number; updatedAt: number }>> =>

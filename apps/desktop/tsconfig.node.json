@@ -8,7 +8,7 @@
   "compilerOptions": {
     "composite": true,
     "outDir": "out/types/node",
-    "types": ["node"],
+    "types": ["node", "bun"],
     "module": "ESNext",
     "moduleResolution": "Bundler"
   }

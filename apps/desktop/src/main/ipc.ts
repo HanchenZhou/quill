@@ -13,6 +13,12 @@ import {
   getDefaultProvider,
   setDefaultProvider
 } from './providers'
+import {
+  runAgent,
+  cancelRun,
+  type AgentRunArgs,
+  type AgentEvent
+} from './agent'
 
 export type FileNode = {
   name: string
@@ -187,6 +193,23 @@ export function registerIpc(): void {
   ipcMain.handle('providers:setDefault', async (_evt, id: string | null) =>
     setDefaultProvider(id)
   )
+
+  // -------- Agent runtime ----------------------------------------------
+  // Renderer fires `agent:run` with a generated runId + args; main streams
+  // events back via `agent:event` on the *sender's* webContents (so other
+  // windows don't see runs they didn't start).
+  ipcMain.handle(
+    'agent:run',
+    async (evt, args: { runId: string } & AgentRunArgs) => {
+      const { runId, ...runArgs } = args
+      const sender = evt.sender
+      await runAgent(runId, runArgs, (event: AgentEvent) => {
+        if (sender.isDestroyed()) return
+        sender.send('agent:event', { runId, event })
+      })
+    }
+  )
+  ipcMain.handle('agent:cancel', async (_evt, runId: string) => cancelRun(runId))
 
   ipcMain.handle(
     'dialog:confirmOpenChoice',
