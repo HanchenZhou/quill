@@ -1,0 +1,250 @@
+/* ============================================================
+ * Markdown preview — Paper prose
+ * 用 .prose-paper（在 Preview.tsx 套上）替代 Tailwind 默认的
+ * prose-neutral。所有字色 / 字体 / 间距走 paper token。
+ * Depends on tokens.css.
+ * ============================================================ */
+
+.prose-paper {
+  color: var(--ink);
+  font-family: "Geist", "Noto Sans SC", -apple-system, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.75;
+  max-width: 64ch;
+}
+
+.prose-paper h1 {
+  font-family: "Fraunces", "Noto Serif SC", Georgia, serif;
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 80, "WONK" 1;
+  font-size: 2.1rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 1rem;
+  color: var(--ink);
+}
+
+.prose-paper h2 {
+  font-family: "Fraunces", "Noto Serif SC", Georgia, serif;
+  font-optical-sizing: auto;
+  font-size: 1.4rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin: 1.8rem 0 0.7rem;
+  color: var(--ink);
+}
+
+.prose-paper h3 {
+  font-family: "Fraunces", "Noto Serif SC", Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 1.4rem 0 0.5rem;
+  color: var(--ink);
+}
+
+.prose-paper h4,
+.prose-paper h5,
+.prose-paper h6 {
+  font-family: "Geist", "Noto Sans SC", sans-serif;
+  font-weight: 600;
+  margin: 1.2rem 0 0.4rem;
+  color: var(--ink);
+}
+
+.prose-paper p {
+  font-family: "Noto Serif SC", "Fraunces", Georgia, serif;
+  font-size: 0.95rem;
+  line-height: 1.85;
+  margin: 0 0 0.95rem;
+  color: var(--ink-soft);
+}
+
+.prose-paper strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.prose-paper em {
+  font-style: italic;
+  color: var(--ink);
+}
+
+.prose-paper a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklch, var(--accent) 50%, transparent);
+}
+
+.prose-paper a:hover {
+  text-decoration-color: var(--accent);
+}
+
+.prose-paper blockquote {
+  font-family: "Fraunces", "Noto Serif SC", serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  border-left: 2px solid var(--accent);
+  padding: 0.1rem 0 0.1rem 0.9rem;
+  color: var(--ink-soft);
+  margin: 0 0 1rem;
+}
+
+.prose-paper blockquote p {
+  font-family: inherit;
+  font-style: inherit;
+  margin: 0;
+  color: inherit;
+}
+
+.prose-paper ul,
+.prose-paper ol {
+  margin: 0 0 1rem;
+  padding-left: 1.4rem;
+}
+
+.prose-paper ul {
+  list-style: none;
+  padding-left: 1.1rem;
+}
+
+.prose-paper ul > li {
+  font-family: "Noto Serif SC", "Fraunces", serif;
+  font-size: 0.95rem;
+  line-height: 1.8;
+  color: var(--ink-soft);
+  margin-bottom: 0.25rem;
+  position: relative;
+}
+
+.prose-paper ul > li::before {
+  content: "·";
+  position: absolute;
+  left: -0.9rem;
+  top: 0.1rem;
+  color: var(--accent);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.prose-paper ol {
+  list-style: decimal;
+}
+
+.prose-paper ol > li {
+  font-family: "Noto Serif SC", "Fraunces", serif;
+  font-size: 0.95rem;
+  line-height: 1.8;
+  color: var(--ink-soft);
+  margin-bottom: 0.25rem;
+  padding-left: 0.25rem;
+}
+
+.prose-paper ol > li::marker {
+  color: var(--accent);
+  font-family: "Fraunces", serif;
+  font-style: italic;
+  font-weight: 500;
+}
+
+/* Task list items — markdown-it renders them as <li> with leading checkbox */
+.prose-paper li input[type="checkbox"] {
+  appearance: none;
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 1.5px solid var(--ink-faint);
+  border-radius: 3px;
+  margin: 0 0.4rem 0 -1.5rem;
+  vertical-align: -2px;
+  cursor: default;
+}
+
+.prose-paper li input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.prose-paper li input[type="checkbox"]:checked + * {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-ghost);
+}
+
+.prose-paper hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 2rem 0;
+}
+
+.prose-paper table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 1rem;
+  font-family: "Geist", "Noto Sans SC", sans-serif;
+  font-size: 0.9rem;
+}
+
+.prose-paper th,
+.prose-paper td {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--rule);
+  text-align: left;
+}
+
+.prose-paper th {
+  background: var(--paper-dim);
+  color: var(--ink);
+  font-weight: 600;
+  font-family: "Fraunces", serif;
+  font-style: italic;
+  font-weight: 500;
+}
+
+.prose-paper img {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 1rem 0;
+}
+
+/* Inline code */
+.prose-paper :not(pre) > code {
+  background-color: var(--paper-soft);
+  color: var(--ink);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  font-size: 0.86em;
+  font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Code blocks */
+.prose-paper pre.hljs,
+.prose-paper pre {
+  background-color: var(--code-bg) !important;
+  color: var(--code-fg) !important;
+  border: 1px solid var(--code-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 1rem;
+}
+
+.prose-paper pre code,
+.prose-paper pre.hljs code {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* Strip prose's default `` quote marks around inline code */
+.prose-paper :where(code):not(:where([class~="hljs"] *))::before,
+.prose-paper :where(code):not(:where([class~="hljs"] *))::after {
+  content: "" !important;
+}

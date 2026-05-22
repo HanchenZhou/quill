@@ -1,0 +1,37 @@
+{
+  "name": "@quill/web",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Quill browser client (PC + H5). Read-only vault browser today; editor + agent in follow-up steps.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@quill/core": "workspace:*",
+    "@quill/shared-types": "workspace:*",
+    "@quill/vault-adapter": "workspace:*",
+    "highlight.js": "^11.11.1",
+    "markdown-it": "^14.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/bun": "^1.3.14",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

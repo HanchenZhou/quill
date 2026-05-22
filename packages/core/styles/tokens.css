@@ -1,0 +1,93 @@
+/* ============================================================
+ * Paper · 纸感编辑器 — 色彩 / 字体 token
+ * 暖白纸底 + 衬线大标题 + 旧打字机红强调。chrome 不靠 border
+ * 也不靠 shadow 分层，靠几档纸感色阶推进。
+ * ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* Paper surface stack (background steps) */
+  --paper:        oklch(0.974 0.012 86);
+  --paper-dim:    oklch(0.952 0.014 84);
+  --paper-soft:   oklch(0.928 0.016 80);
+  --paper-edge:   oklch(0.892 0.018 76);
+
+  /* Ink scale (foreground) */
+  --ink:          oklch(0.225 0.018 50);
+  --ink-soft:     oklch(0.420 0.014 50);
+  --ink-faint:    oklch(0.620 0.010 50);
+  --ink-ghost:    oklch(0.780 0.008 50);
+
+  /* Hairlines */
+  --rule:         oklch(0.880 0.014 75);
+  --rule-soft:    oklch(0.920 0.012 78);
+
+  /* Accent — 旧打字机色带的红 */
+  --accent:       oklch(0.55  0.16 28);
+  --accent-soft:  oklch(0.930 0.04 35);
+
+  /* Code block surface */
+  --code-bg:      var(--paper-soft);
+  --code-border:  var(--rule);
+  --code-fg:      var(--ink);
+
+  /* highlight.js — paper-warm GitHub Light variant */
+  --hl-comment:   #8a7e6b;
+  --hl-keyword:   #b53d2e;
+  --hl-string:    #5a6f3a;
+  --hl-number:    #8a5a18;
+  --hl-builtin:   #7a4ea8;
+  --hl-function:  #7a4ea8;
+  --hl-variable:  #8a5018;
+  --hl-type:      #8a5018;
+  --hl-meta:      #8a7e6b;
+  --hl-tag:       #4a6a2a;
+  --hl-symbol:    #1f5180;
+  --hl-attr:      #1f5180;
+  --hl-deletion-bg: #f3dcd7;
+  --hl-deletion-fg: #7a1d10;
+  --hl-addition-bg: #dde9c8;
+  --hl-addition-fg: #2a4a18;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper:        oklch(0.178 0.012 248);
+  --paper-dim:    oklch(0.206 0.012 248);
+  --paper-soft:   oklch(0.238 0.014 250);
+  --paper-edge:   oklch(0.282 0.015 250);
+
+  --ink:          oklch(0.924 0.008 80);
+  --ink-soft:     oklch(0.740 0.008 80);
+  --ink-faint:    oklch(0.540 0.008 80);
+  --ink-ghost:    oklch(0.400 0.008 80);
+
+  --rule:         oklch(0.300 0.012 248);
+  --rule-soft:    oklch(0.260 0.012 248);
+
+  --accent:       oklch(0.78  0.14 40);
+  --accent-soft:  oklch(0.300 0.08 35);
+
+  --code-bg:      var(--paper-soft);
+  --code-border:  var(--rule);
+  --code-fg:      var(--ink);
+
+  --hl-comment:   #8a8378;
+  --hl-keyword:   #e87b6c;
+  --hl-string:    #c8cf9a;
+  --hl-number:    #e8b06e;
+  --hl-builtin:   #c4a8e0;
+  --hl-function:  #c4a8e0;
+  --hl-variable:  #e8b06e;
+  --hl-type:      #e8b06e;
+  --hl-meta:      #8a8378;
+  --hl-tag:       #a8c884;
+  --hl-symbol:    #8ac4e8;
+  --hl-attr:      #8ac4e8;
+  --hl-deletion-bg: #4a1c14;
+  --hl-deletion-fg: #ffd5cd;
+  --hl-addition-bg: #1f3818;
+  --hl-addition-fg: #c5e4b2;
+}
