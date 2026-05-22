@@ -1,0 +1,95 @@
+/* ============================================================
+ * Agent panel prose — compact variant for chat bubbles
+ * Depends on tokens.css.
+ * ============================================================ */
+
+.prose-agent {
+  color: var(--ink);
+  font-family: "Geist", "Noto Sans SC", -apple-system, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.prose-agent > :first-child { margin-top: 0; }
+.prose-agent > :last-child { margin-bottom: 0; }
+
+.prose-agent p {
+  margin: 0 0 0.55rem;
+  color: var(--ink);
+}
+
+.prose-agent h1, .prose-agent h2, .prose-agent h3,
+.prose-agent h4, .prose-agent h5, .prose-agent h6 {
+  font-family: "Fraunces", "Noto Serif SC", Georgia, serif;
+  color: var(--ink);
+  font-weight: 600;
+  margin: 0.7rem 0 0.35rem;
+  line-height: 1.3;
+}
+.prose-agent h1 { font-size: 1.15rem; }
+.prose-agent h2 { font-size: 1.05rem; }
+.prose-agent h3 { font-size: 1rem; }
+.prose-agent h4, .prose-agent h5, .prose-agent h6 { font-size: 0.95rem; }
+
+.prose-agent strong { color: var(--ink); font-weight: 600; }
+.prose-agent em { font-style: italic; color: var(--ink); }
+.prose-agent a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose-agent ul, .prose-agent ol {
+  margin: 0 0 0.55rem;
+  padding-left: 1.25rem;
+}
+.prose-agent li { margin: 0 0 0.15rem; }
+.prose-agent ul { list-style: disc; }
+.prose-agent ol { list-style: decimal; }
+.prose-agent ul > li::marker, .prose-agent ol > li::marker {
+  color: var(--ink-faint);
+}
+
+.prose-agent blockquote {
+  border-left: 2px solid var(--rule);
+  padding: 0.05rem 0 0.05rem 0.7rem;
+  margin: 0 0 0.55rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.prose-agent hr {
+  border: 0;
+  border-top: 1px solid var(--rule-soft);
+  margin: 0.9rem 0;
+}
+
+.prose-agent :not(pre) > code {
+  background: var(--paper-soft);
+  color: var(--ink);
+  padding: 0.08em 0.35em;
+  border-radius: 3px;
+  font-size: 0.86em;
+  font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+
+.prose-agent pre.hljs,
+.prose-agent pre {
+  background: var(--code-bg) !important;
+  color: var(--code-fg) !important;
+  border: 1px solid var(--code-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0 0 0.6rem;
+}
+.prose-agent pre code,
+.prose-agent pre.hljs code {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0;
+  font-size: inherit;
+}

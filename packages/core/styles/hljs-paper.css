@@ -1,0 +1,84 @@
+/* ============================================================
+ * highlight.js token theme — paper-warm
+ * Depends on tokens.css (uses --hl-* variables).
+ * ============================================================ */
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-doctag {
+  color: var(--hl-keyword);
+}
+
+.hljs-string,
+.hljs-template-string,
+.hljs-regexp,
+.hljs-meta-string {
+  color: var(--hl-string);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--hl-number);
+}
+
+.hljs-built_in,
+.hljs-class .hljs-title,
+.hljs-title.class_ {
+  color: var(--hl-builtin);
+}
+
+.hljs-function .hljs-title,
+.hljs-title.function_ {
+  color: var(--hl-function);
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-attr {
+  color: var(--hl-attr);
+}
+
+.hljs-type,
+.hljs-params {
+  color: var(--hl-type);
+}
+
+.hljs-meta,
+.hljs-meta .hljs-keyword {
+  color: var(--hl-meta);
+}
+
+.hljs-tag,
+.hljs-name {
+  color: var(--hl-tag);
+}
+
+.hljs-attribute {
+  color: var(--hl-attr);
+}
+
+.hljs-deletion {
+  background-color: var(--hl-deletion-bg);
+  color: var(--hl-deletion-fg);
+}
+
+.hljs-addition {
+  background-color: var(--hl-addition-bg);
+  color: var(--hl-addition-fg);
+}
+
+.hljs-strong {
+  font-weight: 600;
+}
+.hljs-emphasis {
+  font-style: italic;
+}

@@ -1,0 +1,37 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Paper theme — same tokens / typography / prose as the desktop app. */
+@import "@quill/core/styles/tokens.css";
+@import "@quill/core/styles/base.css";
+@import "@quill/core/styles/prose-paper.css";
+@import "@quill/core/styles/hljs-paper.css";
+
+/* Browser-only: hide native scrollbars in tighter spaces (sidebar, etc).
+ * H5 uses inertial scroll anyway; sidebar with chrome scrollbars looks
+ * heavy on macOS overlay style. */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-ghost) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--ink-ghost);
+  border-radius: 3px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* iOS Safari: 16px minimum input font-size to avoid the auto-zoom-on-focus
+ * heuristic — see docs/web-server.md "iOS Safari 的几个坑". */
+input,
+textarea,
+select {
+  font-size: max(1rem, 16px);
+}
