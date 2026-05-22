@@ -28,6 +28,9 @@ services:
       # Server config, mounted read-only so the container can't
       # accidentally rewrite it.
       - ./config.yaml:/data/config.yaml:ro
+      # Writable runtime state — providers.json (API keys configured
+      # via the web settings UI) and any future at-rest state lives here.
+      - ./state:/data/state
 
     # Pass-through env so config.yaml can reference ${OPENAI_API_KEY}
     # etc. without baking secrets into the file on disk.

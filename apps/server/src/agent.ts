@@ -1,30 +1,22 @@
 import { Hono } from 'hono'
 import { createBunWebSocket } from 'hono/bun'
-import { AgentRuntime, type CredentialProvider } from '@quill/agent'
+import { z } from 'zod'
+import {
+  AgentRuntime,
+  listSupportedProviders,
+  type CredentialProvider
+} from '@quill/agent'
 import type {
   AgentEvent,
   AgentProviderInfo,
   ClientAgentMessage,
   ServerAgentMessage
 } from '@quill/shared-types'
-import type { ProviderConfig } from './config'
 import { requireSession } from './auth'
-
-/**
- * Build a CredentialProvider that looks up api_keys from config.yaml.
- * Returning null on miss lets makeModel throw the user-facing "not
- * configured" error rather than throwing here.
- */
-function credentialsFromConfig(providers: ProviderConfig[]): CredentialProvider {
-  return {
-    async getKey(providerId: string): Promise<string | null> {
-      return providers.find((p) => p.id === providerId)?.api_key ?? null
-    }
-  }
-}
+import type { ProvidersStore } from './providers-store'
 
 export type AgentDeps = {
-  providers: ProviderConfig[]
+  store: ProvidersStore
   sessionSecret: string
   /** The server's vault root. Always overrides client-supplied scope.root —
    *  the client must not get to point the agent at arbitrary fs paths. */
@@ -33,8 +25,11 @@ export type AgentDeps = {
 
 /**
  * Mount routes:
- *  - GET  /api/agent/providers     → AgentProviderInfo[]
- *  - WS   /api/agent               → bidirectional stream
+ *  - GET    /api/agent/catalog              → supported providers (id / kind / baseURL / models)
+ *  - GET    /api/agent/providers            → currently-configured (sanitized)
+ *  - POST   /api/agent/providers            → upsert { id, api_key, model }
+ *  - DELETE /api/agent/providers/:id        → remove
+ *  - WS     /api/agent                      → bidirectional run stream
  *
  * Returns the Hono sub-app + the `websocket` handler that the Bun.serve
  * caller needs to register at the top level.
@@ -42,7 +37,14 @@ export type AgentDeps = {
 export function createAgentRoutes(
   deps: AgentDeps
 ): { app: Hono; websocket: ReturnType<typeof createBunWebSocket>['websocket'] } {
-  const credentials = credentialsFromConfig(deps.providers)
+  // CredentialProvider reads through the store on each call so newly-added
+  // keys take effect immediately — no need to restart the runtime when the
+  // user saves a new provider in the settings UI.
+  const credentials: CredentialProvider = {
+    async getKey(providerId) {
+      return deps.store.getKey(providerId)
+    }
+  }
   const runtime = new AgentRuntime({ credentials })
   const serverScope = {
     kind: 'workspace' as const,
@@ -52,14 +54,67 @@ export function createAgentRoutes(
 
   const app = new Hono()
 
-  // Provider catalog — sanitized. Web uses this to populate the model
-  // picker (and to hide the agent panel entirely when nothing is set up).
+  // Catalog: everything @quill/agent knows about. Filtered to providers
+  // with at least one model — the rest are stubs waiting for their model
+  // tables to be populated.
+  app.get('/catalog', requireSession(deps.sessionSecret), (c) => {
+    return c.json(
+      listSupportedProviders()
+        .filter((p) => p.models.length > 0)
+        .map((p) => ({
+          id: p.id,
+          kind: p.kind,
+          baseURL: p.baseURL,
+          models: p.models,
+          defaultModelId: p.defaultModelId
+        }))
+    )
+  })
+
+  // What the user has configured. AgentPanel uses this list to decide
+  // which model to pick. Stripped of api_key.
   app.get('/providers', requireSession(deps.sessionSecret), (c) => {
-    const out: AgentProviderInfo[] = deps.providers.map((p) => ({
-      id: p.id,
-      models: p.models
-    }))
+    const supported = new Map(listSupportedProviders().map((p) => [p.id, p]))
+    const out: AgentProviderInfo[] = deps.store.listPublic().map((s) => {
+      const catalog = supported.get(s.id)
+      // Hand back the user's *chosen* model first; if for some reason
+      // the catalog has more, web can decide whether to expose them.
+      const models = catalog
+        ? Array.from(new Set([s.model, ...catalog.models])).filter(Boolean)
+        : s.model ? [s.model] : []
+      return { id: s.id, models }
+    })
     return c.json(out)
+  })
+
+  const UpsertSchema = z.object({
+    id: z.string().min(1),
+    api_key: z.string().optional(),
+    model: z.string().min(1)
+  })
+
+  app.post('/providers', requireSession(deps.sessionSecret), async (c) => {
+    const parsed = UpsertSchema.safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: 'invalid body' }, 400)
+    const supported = listSupportedProviders().find((p) => p.id === parsed.data.id)
+    if (!supported) return c.json({ error: `unknown provider: ${parsed.data.id}` }, 400)
+    if (supported.models.length > 0 && !supported.models.includes(parsed.data.model)) {
+      return c.json({ error: `unknown model for ${parsed.data.id}: ${parsed.data.model}` }, 400)
+    }
+    try {
+      await deps.store.upsert(parsed.data)
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : String(err) },
+        400
+      )
+    }
+    return c.json({ ok: true })
+  })
+
+  app.delete('/providers/:id', requireSession(deps.sessionSecret), async (c) => {
+    await deps.store.remove(c.req.param('id'))
+    return c.json({ ok: true })
   })
 
   app.get(

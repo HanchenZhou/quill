@@ -12,7 +12,7 @@ const modes: { id: ViewMode; label: string }[] = [
 
 export function ModeSwitcher({ value, onChange }: Props): JSX.Element {
   return (
-    <div className="flex items-center gap-0.5 bg-[--paper-soft] rounded p-0.5">
+    <div className="flex items-center gap-0.5 bg-[var(--paper-soft)] rounded p-0.5">
       {modes.map((m) => (
         <button
           key={m.id}
@@ -23,8 +23,8 @@ export function ModeSwitcher({ value, onChange }: Props): JSX.Element {
           className={[
             'px-2 py-0.5 rounded text-sm leading-none transition-colors',
             value === m.id
-              ? 'bg-[--paper] text-[--ink] shadow-sm'
-              : 'text-[--ink-faint] hover:text-[--ink-soft]'
+              ? 'bg-[var(--paper)] text-[var(--ink)] shadow-sm'
+              : 'text-[var(--ink-faint)] hover:text-[var(--ink-soft)]'
           ].join(' ')}
         >
           {m.label}

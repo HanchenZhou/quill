@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Login } from './pages/Login'
 import { Vault } from './pages/Vault'
+import { Settings } from './pages/Settings'
 import { isAuthenticated } from './lib/auth'
 
 type AuthState = 'unknown' | 'authed' | 'guest'
@@ -32,7 +33,7 @@ export function App(): JSX.Element {
 
   if (auth === 'unknown') {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center text-sm text-[--ink-faint]">
+      <div className="min-h-[100dvh] flex items-center justify-center text-sm text-[var(--ink-faint)]">
         正在加载…
       </div>
     )
@@ -44,6 +45,10 @@ export function App(): JSX.Element {
       <Route
         path="/"
         element={auth === 'authed' ? <Vault /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/settings"
+        element={auth === 'authed' ? <Settings /> : <Navigate to="/login" replace />}
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

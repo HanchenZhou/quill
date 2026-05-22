@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState
+} from 'react'
 import type { FileNode } from '@quill/shared-types'
 import type { VaultProvider } from '@quill/vault-adapter'
 
@@ -10,6 +17,14 @@ type TreeProps = {
   onPathRenamed?: (oldPath: string, newPath: string) => void
   /** Notify parent that a path was deleted so it can close the editor. */
   onPathDeleted?: (path: string) => void
+}
+
+/** Imperative API exposed via ref — Vault calls refresh() after agent
+ *  runs so server-side file changes show up in the tree without a reload. */
+export type FileTreeHandle = {
+  /** Re-fetch the root + every currently-expanded directory. Skips
+   *  unmounted subtrees (collapsed dirs that weren't loaded). */
+  refresh(): Promise<void>
 }
 
 type Loaded = { status: 'loaded'; entries: FileNode[] }
@@ -31,13 +46,10 @@ function parentOf(path: string): string {
 
 const MD_EXT = /\.(md|markdown|mdown|mkd)$/i
 
-export function FileTree({
-  vault,
-  selectedPath,
-  onSelect,
-  onPathRenamed,
-  onPathDeleted
-}: TreeProps): JSX.Element {
+export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
+  { vault, selectedPath, onSelect, onPathRenamed, onPathDeleted },
+  ref
+): JSX.Element {
   const [root, setRoot] = useState<NodeState>({ status: 'loading' })
   // Dirs we've expanded; null means "should be expanded but not loaded yet".
   const [expanded, setExpanded] = useState<Record<string, NodeState>>({})
@@ -79,6 +91,26 @@ export function FileTree({
     setExpanded((prev) => ({ ...prev, [node.path]: { status: 'loading' } }))
     await reloadDir(node.path)
   }
+
+  // Expose imperative refresh() so Vault can ask us to re-fetch after an
+  // out-of-band write (e.g. agent finished a tool run). We mirror
+  // `expanded` into a ref so refresh sees the latest set without us
+  // re-binding the imperative handle on every state change.
+  const expandedRef = useRef(expanded)
+  useEffect(() => {
+    expandedRef.current = expanded
+  }, [expanded])
+  useImperativeHandle(
+    ref,
+    () => ({
+      async refresh() {
+        const dirs = ['', ...Object.keys(expandedRef.current)]
+        // Refresh in parallel — independent fetches, no ordering needed.
+        await Promise.all(dirs.map((d) => reloadDir(d)))
+      }
+    }),
+    [reloadDir]
+  )
 
   // Ask the user for a name (prompt for v0; replace with a nicer modal later).
   function promptForName(message: string, defaultValue = ''): string | null {
@@ -191,8 +223,8 @@ export function FileTree({
           className={[
             'w-full flex items-center gap-1 text-sm rounded transition-colors',
             isSelected
-              ? 'bg-[--accent-soft] text-[--ink]'
-              : 'hover:bg-[--paper-dim] text-[--ink-soft]'
+              ? 'bg-[var(--accent-soft)] text-[var(--ink)]'
+              : 'hover:bg-[var(--paper-dim)] text-[var(--ink-soft)]'
           ].join(' ')}
         >
           <button
@@ -209,7 +241,7 @@ export function FileTree({
             ].join(' ')}
             style={{ paddingLeft: `${depth * 12 + 8}px` }}
           >
-            <span className="w-3 text-[--ink-faint] text-xs shrink-0">
+            <span className="w-3 text-[var(--ink-faint)] text-xs shrink-0">
               {node.isDirectory ? (isExpanded ? '▾' : '▸') : ''}
             </span>
             {isRenaming ? (
@@ -230,7 +262,7 @@ export function FileTree({
                 e.stopPropagation()
                 setActionsForPath((p) => (p === node.path ? null : node.path))
               }}
-              className="opacity-0 group-hover/row:opacity-100 transition-opacity px-2 text-[--ink-faint] hover:text-[--ink-soft]"
+              className="opacity-0 group-hover/row:opacity-100 transition-opacity px-2 text-[var(--ink-faint)] hover:text-[var(--ink-soft)]"
               aria-label="文件操作"
             >
               ⋯
@@ -256,7 +288,7 @@ export function FileTree({
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-2 pt-2 pb-1">
-        <span className="text-xs text-[--ink-faint] uppercase tracking-wider">
+        <span className="text-xs text-[var(--ink-faint)] uppercase tracking-wider">
           Vault
         </span>
         <div className="flex items-center gap-1">
@@ -264,7 +296,7 @@ export function FileTree({
             type="button"
             onClick={() => void newFile()}
             title="新建文件"
-            className="text-sm text-[--ink-faint] hover:text-[--ink] hover:bg-[--paper-soft] rounded px-1.5 py-0.5"
+            className="text-sm text-[var(--ink-faint)] hover:text-[var(--ink)] hover:bg-[var(--paper-soft)] rounded px-1.5 py-0.5"
           >
             📄+
           </button>
@@ -272,16 +304,16 @@ export function FileTree({
             type="button"
             onClick={() => void newFolder()}
             title="新建文件夹"
-            className="text-sm text-[--ink-faint] hover:text-[--ink] hover:bg-[--paper-soft] rounded px-1.5 py-0.5"
+            className="text-sm text-[var(--ink-faint)] hover:text-[var(--ink)] hover:bg-[var(--paper-soft)] rounded px-1.5 py-0.5"
           >
             📁+
           </button>
         </div>
       </header>
       {root.status === 'loading' ? (
-        <div className="text-xs text-[--ink-faint] p-3">加载中…</div>
+        <div className="text-xs text-[var(--ink-faint)] p-3">加载中…</div>
       ) : root.status === 'error' ? (
-        <div className="text-xs text-[--accent] p-3">加载失败：{root.message}</div>
+        <div className="text-xs text-[var(--accent)] p-3">加载失败：{root.message}</div>
       ) : (
         <nav className="flex-1 flex flex-col py-1 scroll-thin overflow-y-auto">
           {root.entries.map((e) => renderRow(e, 0))}
@@ -289,7 +321,7 @@ export function FileTree({
       )}
     </div>
   )
-}
+})
 
 function RenameInput({
   value,
@@ -323,7 +355,7 @@ function RenameInput({
         }
       }}
       onBlur={onCommit}
-      className="bg-[--paper] border border-[--accent] rounded px-1 py-0 text-sm flex-1 min-w-0"
+      className="bg-[var(--paper)] border border-[var(--accent)] rounded px-1 py-0 text-sm flex-1 min-w-0"
     />
   )
 }
@@ -345,7 +377,7 @@ function RowMenu({
     }
   }, [onClose])
   return (
-    <div className="absolute right-2 top-full z-30 mt-0.5 bg-[--paper] border border-[--rule] rounded shadow-md py-1 min-w-28">
+    <div className="absolute right-2 top-full z-30 mt-0.5 bg-[var(--paper)] border border-[var(--rule)] rounded shadow-md py-1 min-w-28">
       {actions.map((a) => (
         <button
           key={a.label}
@@ -357,8 +389,8 @@ function RowMenu({
           className={[
             'w-full text-left px-3 py-1 text-sm transition-colors',
             a.danger
-              ? 'text-[--accent] hover:bg-[--accent-soft]'
-              : 'text-[--ink-soft] hover:bg-[--paper-dim]'
+              ? 'text-[var(--accent)] hover:bg-[var(--accent-soft)]'
+              : 'text-[var(--ink-soft)] hover:bg-[var(--paper-dim)]'
           ].join(' ')}
         >
           {a.label}
@@ -380,7 +412,7 @@ function ChildList({
   if (state.status === 'loading') {
     return (
       <div
-        className="text-xs text-[--ink-faint] px-2 py-1"
+        className="text-xs text-[var(--ink-faint)] px-2 py-1"
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
       >
         …
@@ -390,7 +422,7 @@ function ChildList({
   if (state.status === 'error') {
     return (
       <div
-        className="text-xs text-[--accent] px-2 py-1"
+        className="text-xs text-[var(--accent)] px-2 py-1"
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
       >
         {state.message}

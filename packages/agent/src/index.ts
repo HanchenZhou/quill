@@ -20,7 +20,8 @@ import { compressConversation } from './compress'
 import type { CredentialProvider } from './credentials'
 
 export type { CredentialProvider } from './credentials'
-export { migrateModelId } from './providers'
+export { migrateModelId, listSupportedProviders } from './providers'
+export type { ProviderKind, ProviderProfile } from './providers'
 export { buildSystemPrompt } from './prompt'
 export { createContextStore } from './context'
 
