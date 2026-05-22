@@ -44,6 +44,7 @@ type Action =
   | { type: 'BEGIN_SAVE' }
   | { type: 'END_SAVE'; path: string; content: string }
   | { type: 'SAVE_FAILED' }
+  | { type: 'RELOAD_CURRENT_FILE'; path: string; content: string }
   | { type: 'RENAME_FILE'; oldPath: string; newPath: string; newName: string }
   | { type: 'SET_VIEW_MODE'; mode: ViewMode }
   | { type: 'TOGGLE_SIDEBAR' }
@@ -57,7 +58,7 @@ const initialState: State = {
   saving: false
 }
 
-function reducer(s: State, a: Action): State {
+export function reducer(s: State, a: Action): State {
   switch (a.type) {
     case 'OPEN_WORKSPACE':
       return {
@@ -99,6 +100,24 @@ function reducer(s: State, a: Action): State {
       }
     case 'SAVE_FAILED':
       return { ...s, saving: false }
+    case 'RELOAD_CURRENT_FILE': {
+      // Triggered when something outside the editor (currently: the agent's
+      // write tools) modifies the open file on disk. We always sync `content`
+      // to the new disk truth, but only overwrite `buffer` if the editor was
+      // clean — otherwise the user's unsaved edits would vanish silently.
+      // After this, isDirty() may report true against the new disk state,
+      // which is the honest outcome.
+      if (!s.currentFile || s.currentFile.path !== a.path) return s
+      const wasDirty = s.currentFile.buffer !== s.currentFile.content
+      return {
+        ...s,
+        currentFile: {
+          ...s.currentFile,
+          content: a.content,
+          buffer: wasDirty ? s.currentFile.buffer : a.content
+        }
+      }
+    }
     case 'RENAME_FILE': {
       const updateTree = (nodes: FileNode[]): FileNode[] =>
         nodes.map((n) => {
@@ -162,6 +181,11 @@ type Ctx = {
   /** Rename the currently open file on disk and reflect in tree + recent.
    *  Throws if validation fails or fs.rename fails — caller must catch. */
   renameCurrentFile: (newName: string) => Promise<void>
+  /** Re-read the open file from disk and refresh the editor buffer. Used
+   *  when an external writer (the agent's write tools) has changed the file
+   *  while it's open. Path-guarded so a stale event after a window switch
+   *  doesn't clobber a different file. */
+  reloadCurrentFile: (path: string) => Promise<void>
 }
 
 const AppContext = createContext<Ctx | null>(null)
@@ -291,6 +315,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setViewMode = useCallback((m: ViewMode) => dispatch({ type: 'SET_VIEW_MODE', mode: m }), [])
   const toggleSidebar = useCallback(() => dispatch({ type: 'TOGGLE_SIDEBAR' }), [])
 
+  const reloadCurrentFile = useCallback(async (path: string) => {
+    // Re-check path against ref at call time — by the time fs.readFile
+    // resolves, the user may have switched files.
+    const cur = stateRef.current.currentFile
+    if (!cur || cur.path !== path) return
+    const content = await ipc.readFile(path)
+    if (stateRef.current.currentFile?.path !== path) return
+    dispatch({ type: 'RELOAD_CURRENT_FILE', path, content })
+  }, [])
+
   const renameCurrentFile = useCallback(async (newName: string) => {
     const cur = stateRef.current.currentFile
     if (!cur?.path) throw new Error('未保存的文件不能重命名')
@@ -353,7 +387,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       save,
       setViewMode,
       toggleSidebar,
-      renameCurrentFile
+      renameCurrentFile,
+      reloadCurrentFile
     }),
     [
       state,
@@ -368,7 +403,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       save,
       setViewMode,
       toggleSidebar,
-      renameCurrentFile
+      renameCurrentFile,
+      reloadCurrentFile
     ]
   )
 
