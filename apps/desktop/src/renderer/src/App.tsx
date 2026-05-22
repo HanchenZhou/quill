@@ -9,9 +9,27 @@ import { StatusBar } from './components/StatusBar'
 import { DragOverlay } from './components/DragOverlay'
 import { AgentPanel } from './components/AgentPanel'
 
+const AGENT_OPEN_KEY = 'quill.agent.open'
+
+function readAgentOpen(): boolean {
+  try {
+    return window.localStorage.getItem(AGENT_OPEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 function Shell() {
   const { state, mode, save } = useApp()
-  const [agentOpen, setAgentOpen] = useState(false)
+  const [agentOpen, setAgentOpen] = useState<boolean>(() => readAgentOpen())
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(AGENT_OPEN_KEY, agentOpen ? '1' : '0')
+    } catch {
+      /* localStorage may be disabled — best-effort persist only */
+    }
+  }, [agentOpen])
 
   // Cmd+S save, Cmd+J toggle agent panel
   useEffect(() => {

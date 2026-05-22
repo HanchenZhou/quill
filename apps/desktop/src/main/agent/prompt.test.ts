@@ -15,6 +15,26 @@ describe('buildSystemPrompt', () => {
     expect(p).toContain('rejected by the runtime')
   })
 
+  it('workspace mode declares write tools and approval requirement', () => {
+    const scope: Scope = { kind: 'workspace', root: '/r' }
+    const p = buildSystemPrompt(scope)
+    expect(p).toContain('write_file')
+    expect(p).toContain('apply_edit')
+    expect(p).toContain('create_file')
+    expect(p).toMatch(/approv/i)
+    // Prefer apply_edit for narrow changes (token economy).
+    expect(p).toMatch(/prefer apply_edit|apply_edit.*small|small.*apply_edit/i)
+  })
+
+  it('single-file mode declares write_file and apply_edit but not create_file', () => {
+    const scope: Scope = { kind: 'single-file', path: '/r/x.md' }
+    const p = buildSystemPrompt(scope)
+    expect(p).toContain('write_file')
+    expect(p).toContain('apply_edit')
+    // create_file is meaningless when scope is exactly one file.
+    expect(p).not.toContain('create_file')
+  })
+
   it('single-file mode pins the exact file path', () => {
     const scope: Scope = { kind: 'single-file', path: '/work/notes/x.md' }
     const p = buildSystemPrompt(scope)

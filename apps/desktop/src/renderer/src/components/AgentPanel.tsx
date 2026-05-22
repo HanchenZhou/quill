@@ -1,16 +1,42 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Send, X, StopCircle, Loader2, ChevronDown, ChevronRight, Wrench } from 'lucide-react'
+import {
+  Send,
+  X,
+  StopCircle,
+  Loader2,
+  ChevronDown,
+  ChevronRight,
+  Wrench,
+  FilePlus,
+  FilePen,
+  FileText,
+  Check
+} from 'lucide-react'
 import { useApp } from '../state/app'
 import { ipc } from '../lib/ipc'
-import type { AgentEvent, Scope } from '../types'
+import { render as renderMd } from '../lib/markdown'
+import type { AgentEvent, ApprovalPayload, Scope } from '../types'
+
+const WRITE_TOOL_NAMES = new Set(['write_file', 'apply_edit', 'create_file'])
 
 type DefaultProvider = { id: string; model: string } | null
+
+type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 
 type Item =
   | { kind: 'user'; text: string }
   | { kind: 'assistant-text'; text: string }
   | { kind: 'tool-call'; toolCallId: string; name: string; args: unknown }
   | { kind: 'tool-result'; toolCallId: string; name: string; result: unknown }
+  | {
+      kind: 'approval'
+      toolCallId: string
+      toolName: string
+      payload: ApprovalPayload
+      status: ApprovalStatus
+      resultError?: string
+      resultPath?: string
+    }
   | { kind: 'error'; message: string }
   | { kind: 'finish'; usage?: unknown }
 
@@ -110,6 +136,9 @@ export function AgentPanel({ onClose }: Props) {
         return [...prev, { kind: 'assistant-text', text: event.delta }]
       }
       if (event.type === 'tool-call') {
+        // Write tools are surfaced via the approval card instead — the tool-call
+        // bubble would be redundant since the card already shows the args.
+        if (WRITE_TOOL_NAMES.has(event.name)) return prev
         return [
           ...prev,
           {
@@ -120,7 +149,47 @@ export function AgentPanel({ onClose }: Props) {
           }
         ]
       }
+      if (event.type === 'tool-approval-request') {
+        return [
+          ...prev,
+          {
+            kind: 'approval',
+            toolCallId: event.toolCallId,
+            toolName: String(event.payload.kind ?? 'write'),
+            payload: event.payload,
+            status: 'pending'
+          }
+        ]
+      }
       if (event.type === 'tool-result') {
+        // For write tools, fold the result into the matching approval card —
+        // success is implied by status='approved', so we only attach an error
+        // (e.g. fs failure post-approval) or a final path. If no approval card
+        // exists (pre-approval scope/exists error), surface as a plain result.
+        if (WRITE_TOOL_NAMES.has(event.name)) {
+          const idx = prev.findIndex(
+            (it) => it.kind === 'approval' && it.toolCallId === event.toolCallId
+          )
+          if (idx === -1) {
+            return [
+              ...prev,
+              {
+                kind: 'tool-result',
+                toolCallId: event.toolCallId,
+                name: event.name,
+                result: event.result
+              }
+            ]
+          }
+          const card = prev[idx] as Extract<Item, { kind: 'approval' }>
+          const r = event.result as { ok?: boolean; error?: string; path?: string } | undefined
+          const next: Item = {
+            ...card,
+            resultError: r && r.ok === false ? r.error ?? 'unknown error' : undefined,
+            resultPath: r && r.ok === true ? r.path : undefined
+          }
+          return [...prev.slice(0, idx), next, ...prev.slice(idx + 1)]
+        }
         return [
           ...prev,
           {
@@ -188,6 +257,40 @@ export function AgentPanel({ onClose }: Props) {
     // which clears busy/runId. We don't clear here to avoid race.
   }, [runId])
 
+  const handleApproval = useCallback(
+    async (toolCallId: string, approved: boolean): Promise<void> => {
+      if (!runId) return
+      // Optimistic UI: flip the card immediately so the user isn't waiting on
+      // the IPC roundtrip + tool execute to confirm their click registered.
+      setItems((prev) =>
+        prev.map((it) =>
+          it.kind === 'approval' && it.toolCallId === toolCallId && it.status === 'pending'
+            ? { ...it, status: approved ? 'approved' : 'rejected' }
+            : it
+        )
+      )
+      await ipc.agent.respondApproval({
+        runId,
+        toolCallId,
+        response: approved ? { approved: true } : { approved: false, reason: 'user rejected' }
+      })
+    },
+    [runId]
+  )
+
+  // Cancel the active run if the panel unmounts (user closes it mid-run) so
+  // the main process doesn't leak agent loops awaiting approval forever.
+  const runIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    runIdRef.current = runId
+  }, [runId])
+  useEffect(() => {
+    return () => {
+      const id = runIdRef.current
+      if (id) void ipc.agent.cancel(id)
+    }
+  }, [])
+
   const handleClear = (): void => {
     setItems([])
   }
@@ -197,9 +300,6 @@ export function AgentPanel({ onClose }: Props) {
       <header className="h-11 px-4 flex items-center gap-2 border-b border-[var(--rule)] shrink-0 bg-[var(--paper)]">
         <span className="font-display italic text-[14px] text-[var(--ink)]">
           Agent
-        </span>
-        <span className="font-serif-zh italic text-[11px] text-[var(--ink-faint)]">
-          (preview)
         </span>
         <div className="flex-1" />
         {items.length > 0 && (
@@ -249,7 +349,7 @@ export function AgentPanel({ onClose }: Props) {
           </div>
         )}
         {items.map((item, i) => (
-          <ItemView key={i} item={item} />
+          <ItemView key={i} item={item} onApproval={handleApproval} />
         ))}
         {busy && (
           <div className="flex items-center gap-2 text-[12px] text-[var(--ink-faint)]">
@@ -301,7 +401,13 @@ export function AgentPanel({ onClose }: Props) {
   )
 }
 
-function ItemView({ item }: { item: Item }) {
+function ItemView({
+  item,
+  onApproval
+}: {
+  item: Item
+  onApproval: (toolCallId: string, approved: boolean) => Promise<void>
+}) {
   if (item.kind === 'user') {
     return (
       <div className="ml-6 px-3 py-2 rounded-md bg-[var(--paper-soft)] text-[13px] text-[var(--ink)] whitespace-pre-wrap">
@@ -310,17 +416,16 @@ function ItemView({ item }: { item: Item }) {
     )
   }
   if (item.kind === 'assistant-text') {
-    return (
-      <div className="text-[13px] text-[var(--ink)] whitespace-pre-wrap leading-[1.65]">
-        {item.text}
-      </div>
-    )
+    return <AssistantText text={item.text} />
   }
   if (item.kind === 'tool-call') {
     return <ToolCallView name={item.name} args={item.args} />
   }
   if (item.kind === 'tool-result') {
     return <ToolResultView name={item.name} result={item.result} />
+  }
+  if (item.kind === 'approval') {
+    return <ApprovalCardView item={item} onApproval={onApproval} />
   }
   if (item.kind === 'error') {
     return (
@@ -337,6 +442,197 @@ function ItemView({ item }: { item: Item }) {
     )
   }
   return null
+}
+
+function AssistantText({ text }: { text: string }) {
+  const html = useMemo(() => renderMd(text), [text])
+  return <div className="prose-agent" dangerouslySetInnerHTML={{ __html: html }} />
+}
+
+function shortPath(p: string): string {
+  const parts = p.split('/')
+  if (parts.length <= 3) return p
+  return '…/' + parts.slice(-2).join('/')
+}
+
+function ApprovalCardView({
+  item,
+  onApproval
+}: {
+  item: Extract<Item, { kind: 'approval' }>
+  onApproval: (toolCallId: string, approved: boolean) => Promise<void>
+}) {
+  const { payload, status, toolName, resultError, resultPath } = item
+  const path = String(payload.path ?? '')
+  const [contentOpen, setContentOpen] = useState(status === 'pending')
+
+  const icon =
+    toolName === 'create_file' ? (
+      <FilePlus className="w-3.5 h-3.5" />
+    ) : toolName === 'apply_edit' ? (
+      <FilePen className="w-3.5 h-3.5" />
+    ) : (
+      <FileText className="w-3.5 h-3.5" />
+    )
+
+  const title =
+    toolName === 'create_file'
+      ? '新建文件'
+      : toolName === 'apply_edit'
+        ? '编辑文件'
+        : toolName === 'write_file'
+          ? '覆写文件'
+          : '写入'
+
+  const borderColor =
+    status === 'pending'
+      ? 'border-[var(--accent)]/60'
+      : status === 'approved'
+        ? 'border-[var(--rule)]'
+        : 'border-[var(--accent)]/30'
+
+  return (
+    <div className={`rounded-md border ${borderColor} bg-[var(--paper)] overflow-hidden`}>
+      <div className="px-3 py-2 flex items-center gap-2 text-[12px] bg-[var(--paper-soft)] border-b border-[var(--rule-soft)]">
+        <span className="text-[var(--accent)]">{icon}</span>
+        <span className="font-serif-zh italic text-[var(--ink-soft)]">{title}</span>
+        <span
+          className="font-mono text-[11px] text-[var(--ink-faint)] truncate flex-1"
+          title={path}
+        >
+          {shortPath(path)}
+        </span>
+        {status === 'approved' && !resultError && (
+          <span className="text-[11px] text-[var(--ink-soft)] flex items-center gap-1">
+            <Check className="w-3 h-3" /> 已应用
+          </span>
+        )}
+        {status === 'approved' && resultError && (
+          <span className="text-[11px] text-[var(--accent)]">写入失败</span>
+        )}
+        {status === 'rejected' && (
+          <span className="text-[11px] text-[var(--ink-faint)] font-serif-zh italic">
+            已拒绝
+          </span>
+        )}
+      </div>
+
+      {toolName === 'apply_edit' ? (
+        <ApplyEditPreview
+          oldText={String(payload.old_text ?? '')}
+          newText={String(payload.new_text ?? '')}
+          open={contentOpen}
+          onToggle={() => setContentOpen((v) => !v)}
+        />
+      ) : (
+        <WriteContentPreview
+          content={String(payload.content ?? '')}
+          open={contentOpen}
+          onToggle={() => setContentOpen((v) => !v)}
+        />
+      )}
+
+      {resultError && (
+        <div className="px-3 py-2 text-[11px] text-[var(--accent)] border-t border-[var(--rule-soft)] font-mono">
+          {resultError}
+        </div>
+      )}
+      {resultPath && status === 'approved' && !resultError && (
+        <div
+          className="px-3 py-1.5 text-[11px] text-[var(--ink-faint)] border-t border-[var(--rule-soft)] font-mono truncate"
+          title={resultPath}
+        >
+          {resultPath}
+        </div>
+      )}
+
+      {status === 'pending' && (
+        <div className="flex border-t border-[var(--rule-soft)]">
+          <button
+            onClick={() => void onApproval(item.toolCallId, false)}
+            className="no-drag flex-1 px-3 py-2 text-[12px] text-[var(--ink-soft)] hover:bg-[var(--paper-soft)] transition border-r border-[var(--rule-soft)]"
+          >
+            拒绝
+          </button>
+          <button
+            onClick={() => void onApproval(item.toolCallId, true)}
+            className="no-drag flex-1 px-3 py-2 text-[12px] font-medium text-[var(--paper)] bg-[var(--accent)] hover:opacity-90 transition"
+          >
+            批准
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WriteContentPreview({
+  content,
+  open,
+  onToggle
+}: {
+  content: string
+  open: boolean
+  onToggle: () => void
+}) {
+  const lineCount = content.split('\n').length
+  const charCount = content.length
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className="no-drag w-full px-3 py-1.5 flex items-center gap-1 text-[11px] text-[var(--ink-soft)] hover:bg-[var(--paper-soft)] transition"
+      >
+        {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        <span className="font-mono">
+          {lineCount} 行 · {charCount} 字符
+        </span>
+      </button>
+      {open && (
+        <pre className="px-3 pb-2 font-mono text-[11px] text-[var(--ink)] whitespace-pre-wrap break-all max-h-[240px] overflow-y-auto">
+          {content}
+        </pre>
+      )}
+    </div>
+  )
+}
+
+function ApplyEditPreview({
+  oldText,
+  newText,
+  open,
+  onToggle
+}: {
+  oldText: string
+  newText: string
+  open: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className="no-drag w-full px-3 py-1.5 flex items-center gap-1 text-[11px] text-[var(--ink-soft)] hover:bg-[var(--paper-soft)] transition"
+      >
+        {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        <span className="font-mono">
+          -{oldText.split('\n').length} / +{newText.split('\n').length} 行
+        </span>
+      </button>
+      {open && (
+        <div className="px-3 pb-2 space-y-1">
+          <pre className="font-mono text-[11px] whitespace-pre-wrap break-all max-h-[120px] overflow-y-auto bg-[color-mix(in_oklch,var(--accent)_10%,transparent)] text-[var(--ink)] px-2 py-1 rounded border-l-2 border-[var(--accent)]/50">
+            <span className="text-[var(--accent)] mr-1">−</span>
+            {oldText}
+          </pre>
+          <pre className="font-mono text-[11px] whitespace-pre-wrap break-all max-h-[120px] overflow-y-auto bg-[color-mix(in_oklch,var(--accent-soft)_60%,transparent)] text-[var(--ink)] px-2 py-1 rounded border-l-2 border-[var(--accent-soft)]">
+            <span className="text-[var(--ink-soft)] mr-1">+</span>
+            {newText}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function ToolCallView({ name, args }: { name: string; args: unknown }) {

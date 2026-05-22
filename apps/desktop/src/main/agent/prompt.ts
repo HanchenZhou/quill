@@ -19,17 +19,54 @@ export function buildSystemPrompt(
 
   if (scope.kind === 'workspace') {
     lines.push('Scope: workspace mode.')
-    lines.push(`You may only read files within this folder: ${scope.root}`)
+    lines.push(`You may operate on files within this folder: ${scope.root}`)
     lines.push(
-      'Available tools: read_file, list_dir, search_in_scope, grep. Any tool call ' +
+      'Read tools: read_file, list_dir, search_in_scope, grep. Any tool call ' +
         'with a path outside scope will be rejected by the runtime.'
+    )
+    lines.push(
+      'Write tools (each requires explicit user approval before disk is touched):'
+    )
+    lines.push(
+      '- apply_edit(path, old_text, new_text): replace one exact occurrence. ' +
+        'old_text must be unique in the file — if it appears more than once, ' +
+        'widen it with surrounding context until unique. Prefer apply_edit for ' +
+        'small targeted changes (saves tokens).'
+    )
+    lines.push(
+      '- write_file(path, content): replace the entire file. Use for big ' +
+        'rewrites or when apply_edit would need most of the file as context.'
+    )
+    lines.push(
+      '- create_file(path, content): make a brand-new file. Errors if the ' +
+        'path already exists; use write_file instead in that case.'
+    )
+    lines.push(
+      'If the user rejects an approval, the tool returns an error — do not ' +
+        'silently retry the same call; ask the user what to change first.'
     )
   } else if (scope.kind === 'single-file') {
     lines.push('Scope: single-file mode.')
     lines.push(`You may only operate on this exact file: ${scope.path}`)
     lines.push(
-      'Available tools: read_file (only the file above). list_dir/search/grep ' +
+      'Read tools: read_file (only the file above). list_dir/search/grep ' +
         'will reject sibling paths.'
+    )
+    lines.push(
+      'Write tools (each requires explicit user approval before disk is touched):'
+    )
+    lines.push(
+      '- apply_edit(path, old_text, new_text): replace one exact occurrence ' +
+        'in the file above. Prefer apply_edit for small targeted changes ' +
+        '(saves tokens).'
+    )
+    lines.push(
+      '- write_file(path, content): replace the entire file. Use for big ' +
+        'rewrites.'
+    )
+    lines.push(
+      'If the user rejects an approval, the tool returns an error — do not ' +
+        'silently retry; ask the user what to change first.'
     )
   } else {
     lines.push('Scope: untitled file (not yet saved to disk).')

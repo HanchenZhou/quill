@@ -31,7 +31,7 @@ describe('getProviderProfile', () => {
   it('returns the profile for a known id', () => {
     const kimi = getProviderProfile('kimi')
     expect(kimi).toBeDefined()
-    expect(kimi?.baseURL).toBe('https://api.moonshot.ai/v1')
+    expect(kimi?.baseURL).toBe('https://api.kimi.com/coding/v1')
     expect(kimi?.defaultModel).toBe('kimi-k2.5')
   })
 

@@ -51,7 +51,7 @@ export const PROVIDERS: ProviderProfile[] = [
   {
     id: 'kimi',
     name: 'Kimi (Moonshot)',
-    baseURL: 'https://api.moonshot.ai/v1',
+    baseURL: 'https://api.kimi.com/coding/v1',
     defaultModel: 'kimi-k2.5',
     kind: 'openai-compatible',
     docs: 'https://platform.kimi.ai/console/api-keys'
