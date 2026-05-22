@@ -61,7 +61,7 @@ function Shell() {
         {agentOpen && <AgentPanel onClose={() => setAgentOpen(false)} />}
       </div>
 
-      <StatusBar />
+      <StatusBar agentOpen={agentOpen} onToggleAgent={() => setAgentOpen((v) => !v)} />
       <DragOverlay />
       {openChoiceRequest && (
         <OpenChoiceDialog
