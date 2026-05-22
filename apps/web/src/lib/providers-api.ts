@@ -8,11 +8,19 @@
 
 import { UnauthorizedError } from './remote-vault'
 
+export type CatalogModel = {
+  id: string
+  /** Total context window in tokens. 0 means unknown — UI suppresses the
+   *  "(X K)" annotation in that case. */
+  contextTokens: number
+  label?: string
+}
+
 export type CatalogEntry = {
   id: string
   kind: 'anthropic' | 'openai-compatible'
   baseURL: string
-  models: string[]
+  models: CatalogModel[]
   defaultModelId: string
 }
 

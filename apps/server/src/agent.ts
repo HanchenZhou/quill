@@ -79,9 +79,8 @@ export function createAgentRoutes(
       const catalog = supported.get(s.id)
       // Hand back the user's *chosen* model first; if for some reason
       // the catalog has more, web can decide whether to expose them.
-      const models = catalog
-        ? Array.from(new Set([s.model, ...catalog.models])).filter(Boolean)
-        : s.model ? [s.model] : []
+      const catalogIds = catalog ? catalog.models.map((m) => m.id) : []
+      const models = Array.from(new Set([s.model, ...catalogIds])).filter(Boolean)
       return { id: s.id, models }
     })
     return c.json(out)
@@ -98,7 +97,10 @@ export function createAgentRoutes(
     if (!parsed.success) return c.json({ error: 'invalid body' }, 400)
     const supported = listSupportedProviders().find((p) => p.id === parsed.data.id)
     if (!supported) return c.json({ error: `unknown provider: ${parsed.data.id}` }, 400)
-    if (supported.models.length > 0 && !supported.models.includes(parsed.data.model)) {
+    if (
+      supported.models.length > 0 &&
+      !supported.models.some((m) => m.id === parsed.data.model)
+    ) {
       return c.json({ error: `unknown model for ${parsed.data.id}: ${parsed.data.model}` }, 400)
     }
     try {

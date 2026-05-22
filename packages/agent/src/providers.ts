@@ -5,28 +5,48 @@ import type { CredentialProvider } from './credentials'
 
 export type ProviderKind = 'anthropic' | 'openai-compatible'
 
+export type ProviderModel = {
+  /** Exact API model id passed to the provider's SDK. */
+  id: string
+  /** Total context window in tokens. The web/desktop UI uses this to:
+   *  - render "(262K)" beside the model name in settings
+   *  - detect when auto-compression should kick in before the next turn
+   *  Set to 0 for providers/models where the window isn't known. */
+  contextTokens: number
+  /** Optional display label — falls back to `id` when omitted. */
+  label?: string
+}
+
 export type ProviderProfile = {
   id: string
   kind: ProviderKind
   baseURL: string
-  /** Preset model ids the renderer dropdown offers. Empty array = provider
-   *  isn't yet open to users (no models in the catalog). */
-  models: string[]
+  /** Preset model catalog. Empty array = provider isn't yet open to users
+   *  (no models in the catalog). */
+  models: ProviderModel[]
   /** Default model id to snap stored configs to when their stored model
    *  no longer appears in `models` (e.g. renames, removals). Empty string
    *  when the provider has no models yet. */
   defaultModelId: string
 }
 
+const KIMI_262K = 262_144
+
 /**
  * Minimal mirror of `renderer/src/lib/providers.ts` PROVIDERS. Keep in sync
  * with the renderer registry; renderer is the source of truth for display
- * name / docs URL / context window sizes. Main only needs the data required
- * to (a) build an ai-sdk model and (b) migrate stored configs with stale
- * model ids.
+ * name / docs URL. This module owns just the data required to (a) build
+ * an ai-sdk model, (b) migrate stored configs with stale model ids, and
+ * (c) hand a sanitized catalog to web clients via the server.
  */
 export const PROFILES: Record<string, ProviderProfile> = {
-  anthropic: { id: 'anthropic', kind: 'anthropic', baseURL: 'https://api.anthropic.com', models: [], defaultModelId: '' },
+  anthropic: {
+    id: 'anthropic',
+    kind: 'anthropic',
+    baseURL: 'https://api.anthropic.com',
+    models: [],
+    defaultModelId: ''
+  },
   openai: {
     id: 'openai',
     kind: 'openai-compatible',
@@ -41,7 +61,12 @@ export const PROFILES: Record<string, ProviderProfile> = {
     id: 'kimi',
     kind: 'anthropic',
     baseURL: 'https://api.kimi.com/coding/v1',
-    models: ['kimi-k2-thinking', 'k2p6', 'k2p5', 'kimi-k2.5'],
+    models: [
+      { id: 'kimi-k2-thinking', contextTokens: KIMI_262K },
+      { id: 'k2p6', contextTokens: KIMI_262K },
+      { id: 'k2p5', contextTokens: KIMI_262K },
+      { id: 'kimi-k2.5', contextTokens: KIMI_262K }
+    ],
     defaultModelId: 'kimi-k2-thinking'
   },
   deepseek: {
@@ -68,7 +93,7 @@ export const PROFILES: Record<string, ProviderProfile> = {
 }
 
 /** Public catalog of supported providers. Server filters this to only
- *  those with at least one model in their catalog before exposing it. */
+ *  those with at least one model before exposing it. */
 export function listSupportedProviders(): ProviderProfile[] {
   return Object.values(PROFILES)
 }
@@ -81,7 +106,7 @@ export function listSupportedProviders(): ProviderProfile[] {
 export function migrateModelId(providerId: string, storedModel: string): string | null {
   const profile = PROFILES[providerId]
   if (!profile || profile.models.length === 0) return null
-  if (profile.models.includes(storedModel)) return null
+  if (profile.models.some((m) => m.id === storedModel)) return null
   return profile.defaultModelId
 }
 

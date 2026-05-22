@@ -16,6 +16,13 @@ const PROVIDER_LABELS: Record<string, string> = {
   qwen: '通义千问 Qwen'
 }
 
+/** 262144 → "262K", 1_000_000 → "1.0M". Mirrors the desktop formatter so
+ *  context-window annotations match across clients. */
+function formatContext(tokens: number): string {
+  if (tokens >= 1_000_000) return (tokens / 1_000_000).toFixed(1) + 'M'
+  return Math.round(tokens / 1000) + 'K'
+}
+
 export function Settings(): JSX.Element {
   const navigate = useNavigate()
   const [catalog, setCatalog] = useState<CatalogEntry[]>([])
@@ -244,8 +251,9 @@ function ProviderModal({ provider, existing, onClose, onSaved }: ModalProps): JS
               className="w-full px-3 py-2 rounded bg-[var(--paper-dim)] border border-[var(--rule)] text-sm outline-none focus:border-[var(--accent)]"
             >
               {provider.models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
+                <option key={m.id} value={m.id}>
+                  {m.label ?? m.id}
+                  {m.contextTokens > 0 ? ` · ${formatContext(m.contextTokens)}` : ''}
                 </option>
               ))}
             </select>
