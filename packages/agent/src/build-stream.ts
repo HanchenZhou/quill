@@ -1,5 +1,18 @@
 import type { AgentEvent } from '@quill/shared-types'
 
+function abortError(): Error {
+  // DOMException is the shape Node, browsers, and the AI SDK all
+  // recognise as a cancellation marker (`err.name === 'AbortError'`).
+  // Falling back to a plain Error keeps the helper usable in stripped
+  // runtimes that don't ship DOMException.
+  if (typeof DOMException === 'function') {
+    return new DOMException('Aborted', 'AbortError')
+  }
+  const e = new Error('Aborted')
+  e.name = 'AbortError'
+  return e
+}
+
 /**
  * Consume the AI SDK `streamText().fullStream` and translate each chunk
  * into an `AgentEvent` for the caller.
@@ -8,11 +21,12 @@ import type { AgentEvent } from '@quill/shared-types'
  * exercised directly in unit tests — wedged LLM providers (half-open TCP,
  * idle keep-alive) can leave `fullStream` waiting on `.next()` forever
  * even after `abortSignal` is tripped on the underlying request, so the
- * loop checks `signal.aborted` between chunks and bails out instead of
- * relying on the SDK to throw. Without this guard, a stuck stream wedges
- * `runAgent`'s outer `await`, which in turn wedges the Electron
- * `ipcMain.handle` reply and shows up in the renderer as
- * "reply was never sent" (see #87).
+ * loop checks `signal.aborted` between chunks and *throws* AbortError
+ * instead of relying on the SDK to throw. The throw is critical: it
+ * lets `runAgent`'s outer `try/catch` see the cancellation and emit a
+ * terminal `error: cancelled` event, which is what clears `busy/runId`
+ * on the renderer (see #89). Silently returning here lets the call
+ * stack unwind cleanly but leaves the UI spinning forever.
  *
  * The chunk shape uses `Record<string, unknown>` because the AI SDK
  * surfaces fields under different names across versions (`text` vs
@@ -24,10 +38,10 @@ export async function consumeBuildStream(
   signal: AbortSignal,
   onEvent: (event: AgentEvent) => void
 ): Promise<void> {
-  if (signal.aborted) return
+  if (signal.aborted) throw abortError()
 
   for await (const chunk of stream) {
-    if (signal.aborted) return
+    if (signal.aborted) throw abortError()
 
     switch (chunk.type) {
       case 'text-delta': {
@@ -94,4 +108,11 @@ export async function consumeBuildStream(
         break
     }
   }
+
+  // Stream closed on its own. If abort fired in the gap between the last
+  // chunk and the iterator finalising, the in-loop check missed it — surface
+  // the cancellation as a throw so the outer catch still emits `error:
+  // cancelled`. Without this, an SDK that unwinds cleanly on abort would
+  // look indistinguishable from a real `finish` to the caller.
+  if (signal.aborted) throw abortError()
 }

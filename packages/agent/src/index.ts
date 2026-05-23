@@ -18,6 +18,7 @@ import { streamPlan } from './plan'
 import { createPlanApprovalsManager } from './plan-approvals'
 import { compressConversation } from './compress'
 import { consumeBuildStream } from './build-stream'
+import { createTerminalEventGuard } from './terminal-event-guard'
 import type { CredentialProvider } from './credentials'
 
 export type { CredentialProvider } from './credentials'
@@ -87,8 +88,15 @@ export class AgentRuntime {
   async runAgent(
     runId: string,
     args: AgentRunArgs,
-    onEvent: (event: AgentEvent) => void
+    rawOnEvent: (event: AgentEvent) => void
   ): Promise<void> {
+    // Belt-and-braces guard: any path out of the try block — including the
+    // silent `return` after a wedge-recovered abort or a missing plan — must
+    // still hit the renderer with a terminal event so the spinner clears.
+    // See #89.
+    const guard = createTerminalEventGuard(rawOnEvent)
+    const onEvent = guard.onEvent
+
     const controller = new AbortController()
     this.runs.set(runId, controller)
     const mode: AgentMode = args.mode ?? 'auto'
@@ -165,6 +173,10 @@ export class AgentRuntime {
       this.approvals.cancelRun(runId)
       this.planApprovals.cancelRun(runId)
       this.runs.delete(runId)
+      // Final safety net — catches every silent `return` path above and
+      // any future refactor that forgets to emit. ensureEmitted is a
+      // no-op when a real finish/error already went out.
+      guard.ensureEmitted('run ended without a terminal event')
     }
   }
 

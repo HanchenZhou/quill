@@ -82,7 +82,10 @@ describe('consumeBuildStream', () => {
     expect(events.map((e) => e.type)).toEqual(['finish'])
   })
 
-  it('returns promptly when abort fires mid-stream and stops emitting', async () => {
+  it('throws AbortError when abort fires mid-stream and stops emitting', async () => {
+    // The throw is what lets `runAgent`'s outer catch see the cancellation
+    // and emit `error: cancelled` — silently returning leaves the renderer
+    // wedged with busy=true forever. See #89.
     const events: AgentEvent[] = []
     const controller = new AbortController()
     const stream = neverEndingStream(
@@ -92,28 +95,27 @@ describe('consumeBuildStream', () => {
 
     const done = consumeBuildStream(stream, controller.signal, (e) => events.push(e))
 
-    // Let the partial chunk get emitted, then abort. The hang at the end of
-    // the stream should now unblock and the loop should bail out without
-    // appending more events.
     await new Promise((r) => setTimeout(r, 10))
     expect(events).toHaveLength(1)
     controller.abort()
-    await done
+    await expect(done).rejects.toMatchObject({ name: 'AbortError' })
 
     // No further events after abort.
     expect(events).toHaveLength(1)
   })
 
-  it('does not emit any events when abort fires before the first chunk', async () => {
+  it('throws AbortError when abort fires before the first chunk', async () => {
     const events: AgentEvent[] = []
     const controller = new AbortController()
     controller.abort()
 
-    await consumeBuildStream(
-      makeStream([{ type: 'text-delta', text: 'should-not-see' }]),
-      controller.signal,
-      (e) => events.push(e)
-    )
+    await expect(
+      consumeBuildStream(
+        makeStream([{ type: 'text-delta', text: 'should-not-see' }]),
+        controller.signal,
+        (e) => events.push(e)
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' })
     expect(events).toHaveLength(0)
   })
 })
