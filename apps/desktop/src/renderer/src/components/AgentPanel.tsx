@@ -33,6 +33,14 @@ import {
 } from '../lib/availableModels'
 import { shouldCompress, splitForCompression } from '../lib/compressionTrigger'
 import { getProviderModel } from '../lib/providers'
+import { createWatchdog, type Watchdog } from '../lib/watchdog'
+
+// Renderer-side dead-man switch: if main goes silent for this long while a
+// run is still believed to be active, the UI recovers itself. main-side
+// guards (terminal-event-guard, IPC try/catch) handle every normal exit;
+// the watchdog is for things they can't reach — main process crash, IPC
+// delivery failure, listener race that drops the terminal event. See #89.
+const AGENT_WATCHDOG_MS = 5 * 60 * 1000
 import { Select } from './Select'
 import type {
   AgentEvent,
@@ -309,6 +317,8 @@ export function AgentPanel({ onClose }: Props) {
       // cancelled run are ignored.
       setRunId((current) => {
         if (current !== incoming) return current
+        // Any sign of life resets the watchdog.
+        watchdogRef.current?.touch()
         applyEvent(event)
         return current
       })
@@ -482,6 +492,7 @@ export function AgentPanel({ onClose }: Props) {
     if (event.type === 'finish' || event.type === 'error') {
       setBusy(false)
       setRunId(null)
+      watchdogRef.current?.stop()
     }
     if (event.type === 'compression-start') setCompressing(true)
     if (event.type === 'compression-complete' || event.type === 'compression-error') {
@@ -602,6 +613,7 @@ export function AgentPanel({ onClose }: Props) {
     const newRunId = genRunId()
     setRunId(newRunId)
     setBusy(true)
+    watchdogRef.current?.start()
     // Prior conversation as model context. v1 keeps only text turns —
     // tool calls and approvals stay visible in the panel but don't feed
     // back into the LLM, since reconstructing them as ToolCallPart /
@@ -632,6 +644,7 @@ export function AgentPanel({ onClose }: Props) {
       ])
       setBusy(false)
       setRunId(null)
+      watchdogRef.current?.stop()
     }
   }, [canRun, provider, scope, input, cur, planChoice, buildChoice])
 
@@ -754,6 +767,32 @@ export function AgentPanel({ onClose }: Props) {
     return () => {
       const id = runIdRef.current
       if (id) void ipc.agent.cancel(id)
+    }
+  }, [])
+
+  // Watchdog: armed when a run starts, touched on every incoming agent
+  // event, fires after AGENT_WATCHDOG_MS of total silence to recover the
+  // UI. Created once at mount; the onTimeout closure only uses stable
+  // refs / state setters so it stays accurate without re-creation.
+  const watchdogRef = useRef<Watchdog | null>(null)
+  useEffect(() => {
+    const w = createWatchdog(AGENT_WATCHDOG_MS, () => {
+      const id = runIdRef.current
+      setBusy(false)
+      setRunId(null)
+      setItems((prev) => [
+        ...prev,
+        {
+          kind: 'error',
+          message: `agent 5 分钟无响应，已自动中断；如果 main 进程仍在跑可在日志里追踪 runId=${id ?? 'unknown'}`
+        }
+      ])
+      if (id) void ipc.agent.cancel(id)
+    })
+    watchdogRef.current = w
+    return () => {
+      w.stop()
+      watchdogRef.current = null
     }
   }, [])
 
