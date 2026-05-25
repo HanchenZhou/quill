@@ -50,8 +50,47 @@ describe('getFileType', () => {
     }
   })
 
+  it('recognizes legacy-mode languages (lua / powershell / r / diff)', () => {
+    expect(getFileType('script.lua').language).toBe('lua')
+    expect(getFileType('deploy.ps1').language).toBe('powershell')
+    expect(getFileType('analyse.R').language).toBe('r')
+    expect(getFileType('analysis.r').language).toBe('r')
+    expect(getFileType('change.diff').language).toBe('diff')
+    expect(getFileType('change.patch').language).toBe('diff')
+  })
+
+  it('treats vue / svelte single-file components as html (best-effort)', () => {
+    // CodeMirror 6 has no official lang-vue / lang-svelte; lang-html gives
+    // tag + attribute highlighting which is closer than plain text. The
+    // script / style sections won't get JS / CSS highlighting — acceptable
+    // tradeoff vs. pulling in a community package.
+    expect(getFileType('App.vue').language).toBe('html')
+    expect(getFileType('Page.svelte').language).toBe('html')
+  })
+
   it('treats plain text formats as text without language', () => {
-    for (const name of ['notes.txt', 'app.log', '.env', '.gitignore', 'data.csv', 'app.ini', 'app.conf']) {
+    const cases = [
+      'notes.txt',
+      'app.log',
+      '.env',
+      '.gitignore',
+      'data.csv',
+      'app.ini',
+      'app.conf',
+      'spring.properties',
+      'Main.kt',
+      'build.gradle.kts',
+      'View.swift',
+      'run.bat',
+      'task.cmd',
+      'main.dart',
+      'Build.scala',
+      'build.gradle',
+      'sample.tsv',
+      '.dockerignore',
+      '.gitmodules'
+    ]
+    for (const name of cases) {
       const info = getFileType(name)
       expect(info.isText).toBe(true)
       expect(info.isMarkdown).toBe(false)
@@ -60,7 +99,17 @@ describe('getFileType', () => {
   })
 
   it('treats files without extension as plain text', () => {
-    for (const name of ['README', 'LICENSE', 'Makefile', 'Dockerfile']) {
+    for (const name of [
+      'README',
+      'LICENSE',
+      'Makefile',
+      'Dockerfile',
+      '.eslintrc',
+      '.babelrc',
+      '.prettierrc',
+      '.stylelintrc',
+      '.eslintignore'
+    ]) {
       const info = getFileType(name)
       expect(info.isText).toBe(true)
       expect(info.language).toBe(null)
