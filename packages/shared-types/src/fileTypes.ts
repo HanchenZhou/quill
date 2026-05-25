@@ -16,6 +16,10 @@ export type FileLanguage =
   | 'shell'
   | 'ruby'
   | 'toml'
+  | 'lua'
+  | 'powershell'
+  | 'r'
+  | 'diff'
 
 export type FileTypeInfo = {
   isText: boolean
@@ -58,7 +62,17 @@ const LANG_BY_EXT: Record<string, FileLanguage> = {
   bash: 'shell',
   zsh: 'shell',
   rb: 'ruby',
-  toml: 'toml'
+  toml: 'toml',
+  lua: 'lua',
+  ps1: 'powershell',
+  r: 'r',
+  diff: 'diff',
+  patch: 'diff',
+  // Vue / Svelte single-file components fall back to lang-html — tags and
+  // attributes get coloured even if the <script>/<style> sections don't get
+  // JS/CSS highlighting. Better than plain text.
+  vue: 'html',
+  svelte: 'html'
 }
 
 // Text files without dedicated syntax highlighting — editor falls back to
@@ -70,11 +84,34 @@ const PLAIN_TEXT_EXT = new Set([
   'ini',
   'env',
   'csv',
+  'tsv',
   'gitignore',
   'gitattributes',
+  'gitmodules',
+  'dockerignore',
   'editorconfig',
   'npmrc',
-  'nvmrc'
+  'nvmrc',
+  // Dotfile tooling configs (`.eslintrc`, `.babelrc`, …). `extOf` treats
+  // the trailing token after a leading dot as the extension, so they hit
+  // this lookup. Variants with a real extension (`.eslintrc.json` etc.)
+  // get matched via the JSON / JS / YAML language lookups.
+  'eslintrc',
+  'babelrc',
+  'prettierrc',
+  'stylelintrc',
+  'eslintignore',
+  // Java / JVM configs and source files we don't have a CodeMirror lang
+  // pack for. Editable, no highlighting.
+  'properties',
+  'kt',
+  'kts',
+  'swift',
+  'scala',
+  'dart',
+  'gradle',
+  'bat',
+  'cmd'
 ])
 
 // Filenames that are themselves text but carry no extension. Match

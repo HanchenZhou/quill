@@ -12,9 +12,14 @@ files:
 
 asar: true
 
-# Declare that Quill knows how to open Markdown files. On macOS this populates
-# Info.plist → CFBundleDocumentTypes, which is what Finder reads to populate
-# the "Open With" menu.
+# Declare which file types Quill knows how to open. On macOS this populates
+# Info.plist → CFBundleDocumentTypes, which Finder reads to populate the
+# "Open With" menu. Two groups so macOS shows them with distinct names:
+#  - Markdown gets `rank: Default` so double-clicking an .md picks Quill
+#    when no other editor is the registered default.
+#  - All other text formats are `rank: Alternate` — Quill shows up in the
+#    "Open With" submenu but doesn't fight VS Code / IDE defaults.
+# Mirrors the supported set in packages/shared-types/src/fileTypes.ts.
 fileAssociations:
   - ext:
       - md
@@ -24,6 +29,67 @@ fileAssociations:
     name: Markdown Document
     role: Editor
     rank: Default
+    icon: build/icon.icns
+  - ext:
+      - txt
+      - log
+      - conf
+      - ini
+      - env
+      - csv
+      - tsv
+      - properties
+      - js
+      - mjs
+      - cjs
+      - jsx
+      - ts
+      - tsx
+      - mts
+      - cts
+      - json
+      - html
+      - htm
+      - css
+      - xml
+      - svg
+      - py
+      - pyw
+      - java
+      - go
+      - rs
+      - c
+      - h
+      - cc
+      - cpp
+      - hpp
+      - sql
+      - php
+      - yaml
+      - yml
+      - toml
+      - sh
+      - bash
+      - zsh
+      - rb
+      - lua
+      - ps1
+      - r
+      - diff
+      - patch
+      - vue
+      - svelte
+      - kt
+      - kts
+      - swift
+      - scala
+      - dart
+      - gradle
+      - bat
+      - cmd
+    name: Text File
+    role: Editor
+    rank: Alternate
     icon: build/icon.icns
 
 mac:

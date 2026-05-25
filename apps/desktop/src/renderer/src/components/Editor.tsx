@@ -16,10 +16,20 @@ import { cpp } from '@codemirror/lang-cpp'
 import { sql } from '@codemirror/lang-sql'
 import { php } from '@codemirror/lang-php'
 import { yaml } from '@codemirror/lang-yaml'
-import { StreamLanguage, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
+import {
+  StreamLanguage,
+  syntaxHighlighting,
+  defaultHighlightStyle,
+  foldGutter,
+  foldKeymap
+} from '@codemirror/language'
 import { shell } from '@codemirror/legacy-modes/mode/shell'
 import { ruby } from '@codemirror/legacy-modes/mode/ruby'
 import { toml } from '@codemirror/legacy-modes/mode/toml'
+import { lua } from '@codemirror/legacy-modes/mode/lua'
+import { powerShell } from '@codemirror/legacy-modes/mode/powershell'
+import { r } from '@codemirror/legacy-modes/mode/r'
+import { diff } from '@codemirror/legacy-modes/mode/diff'
 import { search } from '@codemirror/search'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { getFileType, type FileLanguage } from '@quill/shared-types'
@@ -74,6 +84,14 @@ function languageExtension(lang: FileLanguage | null): Extension {
       return StreamLanguage.define(ruby)
     case 'toml':
       return StreamLanguage.define(toml)
+    case 'lua':
+      return StreamLanguage.define(lua)
+    case 'powershell':
+      return StreamLanguage.define(powerShell)
+    case 'r':
+      return StreamLanguage.define(r)
+    case 'diff':
+      return StreamLanguage.define(diff)
     default:
       return []
   }
@@ -110,11 +128,21 @@ export function Editor({ value, onChange, theme, filePath, onViewChange }: Props
     const extensions = [
       history(),
       ...(prefs.showLineNumbers ? [lineNumbers()] : []),
+      // foldGutter sits next to lineNumbers when both are on; with line
+      // numbers off it floats alone on the left. CM6 reads fold ranges
+      // from each language pack's syntax tree, so no per-language wiring
+      // needed — plain-text files just show no fold markers.
+      foldGutter(),
       highlightActiveLine(),
       // Search state + match decorations. Driven by our own React panel; we
       // never call `openSearchPanel`, so CM6's built-in panel never shows up.
       search(),
-      keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+      keymap.of([
+        ...defaultKeymap,
+        ...historyKeymap,
+        ...foldKeymap,
+        indentWithTab
+      ]),
       langCompartment.of(languageExtension(initialLang)),
       EditorView.lineWrapping,
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
