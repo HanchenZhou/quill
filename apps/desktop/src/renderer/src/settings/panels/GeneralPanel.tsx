@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { Download, FolderOpen, Loader2, RefreshCw, Upload } from 'lucide-react'
 import { useTheme } from '../../state/theme'
 import { usePrefs } from '../../state/prefs'
 import type { ThemePref, ViewMode } from '../../types'
@@ -79,12 +80,16 @@ function Toggle({ checked, onChange }: ToggleProps) {
   )
 }
 
-function ThemeButton({
-  children,
+function PrimaryThemeAction({
+  icon,
+  label,
+  loading,
   onClick,
   disabled
 }: {
-  children: React.ReactNode
+  icon: React.ReactNode
+  label: string
+  loading?: boolean
   onClick: () => void | Promise<void>
   disabled?: boolean
 }) {
@@ -92,9 +97,38 @@ function ThemeButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="no-drag px-3 py-1.5 rounded-md text-[12.5px] bg-[var(--paper-soft)] text-[var(--ink)] border border-[var(--rule)] hover:bg-[var(--paper-edge)] disabled:opacity-50 disabled:cursor-not-allowed transition"
+      className="no-drag flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12.5px] bg-[var(--paper-edge)] text-[var(--ink)] border border-[var(--rule)] hover:bg-[var(--paper-soft)] disabled:opacity-50 disabled:cursor-not-allowed transition"
     >
-      {children}
+      <span className="text-[var(--ink-soft)]">
+        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : icon}
+      </span>
+      {label}
+    </button>
+  )
+}
+
+function IconThemeAction({
+  icon,
+  title,
+  loading,
+  onClick,
+  disabled
+}: {
+  icon: React.ReactNode
+  title: string
+  loading?: boolean
+  onClick: () => void | Promise<void>
+  disabled?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className="no-drag w-8 h-8 rounded-md flex items-center justify-center text-[var(--ink-faint)] hover:text-[var(--ink)] hover:bg-[var(--paper-soft)] disabled:opacity-40 disabled:cursor-not-allowed transition"
+    >
+      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : icon}
     </button>
   )
 }
@@ -241,23 +275,44 @@ export function GeneralPanel() {
       </Row>
 
       <Row label="自定义主题" hint="JSON 文件存于 ~/.quill/themes/">
-        <div className="flex flex-wrap gap-2 items-center">
-          <ThemeButton onClick={handleImport} disabled={busy !== null}>
-            {busy === 'import' ? '导入中…' : '导入 JSON'}
-          </ThemeButton>
-          <ThemeButton onClick={handleExport} disabled={busy !== null}>
-            {busy === 'export' ? '导出中…' : '导出当前为 JSON'}
-          </ThemeButton>
-          <ThemeButton onClick={handleReveal} disabled={busy !== null}>
-            打开主题文件夹
-          </ThemeButton>
-          <ThemeButton onClick={handleReload} disabled={busy !== null}>
-            {busy === 'reload' ? '加载中…' : '重新加载'}
-          </ThemeButton>
+        <div className="flex flex-col gap-2">
+          {/* Primary action gets its label; the three utility actions are
+            * icon-only with tooltips. The vertical divider between primary
+            * and utilities marks the boundary visually. */}
+          <div className="flex items-center gap-2">
+            <PrimaryThemeAction
+              icon={<Upload className="w-3.5 h-3.5" />}
+              label="导入主题…"
+              loading={busy === 'import'}
+              onClick={handleImport}
+              disabled={busy !== null}
+            />
+            <div className="w-px h-5 bg-[var(--rule-soft)] mx-1" aria-hidden />
+            <IconThemeAction
+              icon={<Download className="w-3.5 h-3.5" />}
+              title="导出当前主题为 JSON"
+              loading={busy === 'export'}
+              onClick={handleExport}
+              disabled={busy !== null}
+            />
+            <IconThemeAction
+              icon={<FolderOpen className="w-3.5 h-3.5" />}
+              title="打开主题文件夹"
+              onClick={handleReveal}
+              disabled={busy !== null}
+            />
+            <IconThemeAction
+              icon={<RefreshCw className="w-3.5 h-3.5" />}
+              title="重新加载主题列表"
+              loading={busy === 'reload'}
+              onClick={handleReload}
+              disabled={busy !== null}
+            />
+          </div>
           {notice && (
-            <span className="font-serif-zh italic text-[12px] text-[var(--ink-faint)]">
+            <p className="font-serif-zh italic text-[12px] text-[var(--ink-faint)]">
               {notice}
-            </span>
+            </p>
           )}
         </div>
       </Row>

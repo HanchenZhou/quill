@@ -3,6 +3,15 @@ import { registerIpc } from './ipc'
 import { buildMenu } from './menu'
 import { createWindow, windows } from './windows'
 
+// Override the app name so dev builds don't show "@quill/desktop" in
+// the macOS app menu / Dock / about dialog. `app.getName()` defaults to
+// `package.json#name`, which is the workspace identifier — fine for npm
+// resolution, ugly for UI. Production builds already get the right name
+// via electron-builder.yml `productName: Quill`, but calling
+// `setName` early here covers dev mode too (must run before whenReady
+// so the menu builder picks it up).
+app.setName('Quill')
+
 // Paths queued during cold start before app is ready — Finder sends `open-file`
 // before `whenReady` fires. Drained in whenReady().
 const pendingOpenAtStartup: string[] = []
