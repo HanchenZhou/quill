@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { detectCollisions, isMarkdownFile, planUpload, uploadFiles } from './upload'
+import { detectCollisions, isSupportedTextUpload, planUpload, uploadFiles } from './upload'
 import type { FileNode, FileStat } from '@quill/shared-types'
 import type { VaultProvider } from '@quill/vault-adapter'
 
@@ -51,12 +51,22 @@ function f(name: string, content: string): File {
 }
 
 describe('upload helpers', () => {
-  test('isMarkdownFile accepts .md / .markdown / .mdown / .mkd', () => {
-    expect(isMarkdownFile(f('a.md', ''))).toBe(true)
-    expect(isMarkdownFile(f('a.markdown', ''))).toBe(true)
-    expect(isMarkdownFile(f('a.mdown', ''))).toBe(true)
-    expect(isMarkdownFile(f('a.mkd', ''))).toBe(true)
-    expect(isMarkdownFile(f('a.txt', ''))).toBe(false)
+  test('isSupportedTextUpload accepts markdown and other text formats', () => {
+    expect(isSupportedTextUpload(f('a.md', ''))).toBe(true)
+    expect(isSupportedTextUpload(f('a.markdown', ''))).toBe(true)
+    expect(isSupportedTextUpload(f('a.mdown', ''))).toBe(true)
+    expect(isSupportedTextUpload(f('a.mkd', ''))).toBe(true)
+    expect(isSupportedTextUpload(f('a.txt', ''))).toBe(true)
+    expect(isSupportedTextUpload(f('a.ts', ''))).toBe(true)
+    expect(isSupportedTextUpload(f('a.json', ''))).toBe(true)
+    expect(isSupportedTextUpload(f('a.yaml', ''))).toBe(true)
+    expect(isSupportedTextUpload(f('Makefile', ''))).toBe(true)
+  })
+
+  test('isSupportedTextUpload rejects binary / unknown extensions', () => {
+    expect(isSupportedTextUpload(f('a.png', ''))).toBe(false)
+    expect(isSupportedTextUpload(f('a.pdf', ''))).toBe(false)
+    expect(isSupportedTextUpload(f('a.unknownext', ''))).toBe(false)
   })
 
   test('planUpload joins dest dir with file name', () => {
