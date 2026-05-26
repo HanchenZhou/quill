@@ -35,3 +35,42 @@ textarea,
 select {
   font-size: max(1rem, 16px);
 }
+
+/* ============================================================
+ * CodeMirror — same shape as desktop's index.css, scoped to web.
+ * ============================================================ */
+.cm-editor {
+  height: 100%;
+  font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  /* iOS auto-zoom guard — same 16px minimum as plain inputs above. */
+  font-size: max(14px, 16px);
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+.cm-scroller {
+  font-family: inherit;
+}
+.cm-editor .cm-activeLine {
+  background-color: color-mix(in oklch, var(--ink) 3%, transparent) !important;
+}
+.cm-editor .cm-activeLineGutter {
+  background-color: color-mix(in oklch, var(--ink) 5%, transparent) !important;
+}
+.cm-editor .cm-searchMatch {
+  background-color: rgba(255, 213, 0, 0.42) !important;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(220, 170, 0, 0.55);
+}
+.cm-editor .cm-searchMatch-selected {
+  background-color: rgba(255, 138, 0, 0.65) !important;
+  box-shadow: 0 0 0 1px rgba(210, 100, 0, 0.85);
+}
+:where([data-theme="dark"]) .cm-editor .cm-searchMatch {
+  background-color: rgba(255, 220, 0, 0.28) !important;
+  box-shadow: 0 0 0 1px rgba(255, 200, 0, 0.4);
+}
+:where([data-theme="dark"]) .cm-editor .cm-searchMatch-selected {
+  background-color: rgba(255, 145, 0, 0.55) !important;
+  box-shadow: 0 0 0 1px rgba(255, 170, 0, 0.7);
+}

@@ -1,4 +1,4 @@
-import type { FileNode } from '@quill/shared-types'
+import { isSupportedTextFile, type FileNode } from '@quill/shared-types'
 import type { VaultProvider } from '@quill/vault-adapter'
 
 export type UploadItem = {
@@ -12,8 +12,6 @@ export type UploadResult = {
   ok: boolean
   error?: string
 }
-
-const MD_EXT = /\.(md|markdown|mdown|mkd)$/i
 
 function joinPath(dir: string, name: string): string {
   const d = dir.replace(/^\/+/, '').replace(/\/+$/, '')
@@ -47,8 +45,10 @@ export function planUpload(destDir: string, files: File[]): UploadItem[] {
   return files.map((file) => ({ file, destPath: joinPath(destDir, file.name) }))
 }
 
-export function isMarkdownFile(file: File): boolean {
-  return MD_EXT.test(file.name)
+/** Accept any file whose extension/basename we recognise as text —
+ *  covers the same set the desktop registers via fileAssociations. */
+export function isSupportedTextUpload(file: File): boolean {
+  return isSupportedTextFile(file.name)
 }
 
 async function readAsText(file: File): Promise<string> {

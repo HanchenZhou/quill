@@ -2,14 +2,41 @@
   "name": "@quill/core",
   "version": "0.0.1",
   "private": true,
-  "description": "Quill shared UI primitives — CSS tokens + (future) React components used by both desktop and web.",
+  "description": "Quill shared UI primitives — CSS tokens + shared editor language map used by both desktop and web.",
   "type": "module",
   "sideEffects": ["./styles/*.css"],
   "exports": {
+    "./codemirror": "./src/codemirror.ts",
     "./styles/tokens.css": "./styles/tokens.css",
     "./styles/base.css": "./styles/base.css",
     "./styles/prose-paper.css": "./styles/prose-paper.css",
     "./styles/prose-agent.css": "./styles/prose-agent.css",
     "./styles/hljs-paper.css": "./styles/hljs-paper.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codemirror/lang-cpp": "^6.0.3",
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-go": "^6.0.1",
+    "@codemirror/lang-html": "^6.4.11",
+    "@codemirror/lang-java": "^6.0.2",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/lang-php": "^6.0.2",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/lang-rust": "^6.0.2",
+    "@codemirror/lang-sql": "^6.10.0",
+    "@codemirror/lang-xml": "^6.1.0",
+    "@codemirror/lang-yaml": "^6.1.3",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/legacy-modes": "^6.5.3",
+    "@codemirror/state": "^6.6.0",
+    "@quill/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
   }
 }

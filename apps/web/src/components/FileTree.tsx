@@ -6,12 +6,12 @@ import {
   useRef,
   useState
 } from 'react'
-import type { FileNode } from '@quill/shared-types'
+import { allTextExtensions, getFileType, type FileNode } from '@quill/shared-types'
 import type { VaultProvider } from '@quill/vault-adapter'
 import { useDialogs } from '../lib/dialogs'
 import {
   detectCollisions,
-  isMarkdownFile,
+  isSupportedTextUpload,
   planUpload,
   uploadFiles,
   type UploadItem,
@@ -53,7 +53,12 @@ function parentOf(path: string): string {
   return i === -1 ? '' : path.slice(0, i)
 }
 
-const MD_EXT = /\.(md|markdown|mdown|mkd)$/i
+// Hint string for the <input type="file"> picker. Built once from the
+// shared text-ext registry so adding a new lang in @quill/shared-types
+// automatically broadens the browser file picker too.
+const PICKER_ACCEPT = allTextExtensions()
+  .map((ext) => `.${ext}`)
+  .join(',')
 
 export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
   { vault, selectedPath, onSelect, onPathRenamed, onPathDeleted },
@@ -163,17 +168,21 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
     if (!name) return
     const dir = currentDir()
     const path = dir ? `${dir}/${name}` : name
-    const finalPath = MD_EXT.test(path) ? path : `${path}.md`
+    // Markdown-first default: if the user didn't type a recognised text
+    // extension, append .md. "foo" → "foo.md", "foo.json" → "foo.json",
+    // "foo.md" → "foo.md".
+    const finalPath = getFileType(path).isText ? path : `${path}.md`
     try {
       await vault.write(finalPath, '')
       await reloadDir(parentOf(finalPath))
       // Auto-open the new file so the user starts editing immediately.
+      const info = getFileType(finalPath)
       onSelect({
         name: finalPath.split('/').pop() ?? finalPath,
         path: finalPath,
         isDirectory: false,
-        isMarkdown: true,
-        isText: true
+        isMarkdown: info.isMarkdown,
+        isText: info.isText
       })
     } catch (err) {
       void dialogs.alert({
@@ -265,11 +274,12 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
 
   async function onFilesPicked(files: File[]): Promise<void> {
     const destDir = uploadTargetRef.current
-    // Filter to markdown files. accept="" hints the picker but isn't
-    // enforced, so the user could still pick a .txt; quietly drop it.
-    const accepted = files.filter(isMarkdownFile)
+    // Filter to supported text files. accept="" hints the picker but
+    // isn't enforced, so the user could still pick a binary; quietly
+    // drop it instead of uploading garbage.
+    const accepted = files.filter(isSupportedTextUpload)
     if (accepted.length === 0) {
-      void dialogs.alert({ message: '请选择 .md / .markdown 文件' })
+      void dialogs.alert({ message: '请选择支持的文本文件' })
       return
     }
     const colliding = await detectCollisions(vault, destDir, accepted)
@@ -317,7 +327,7 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
   function renderRow(node: FileNode, depth: number): JSX.Element {
     const isSelected = node.path === selectedPath
     const isExpanded = !!expanded[node.path]
-    const isMd = node.isMarkdown
+    const isOpenable = node.isText
     const isRenaming = renamingPath === node.path
     const showActions = actionsForPath === node.path
     return (
@@ -335,12 +345,12 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
             onClick={() => {
               if (isRenaming) return
               if (node.isDirectory) void toggle(node)
-              else if (isMd) onSelect(node)
+              else if (isOpenable) onSelect(node)
             }}
-            disabled={!node.isDirectory && !isMd}
+            disabled={!node.isDirectory && !isOpenable}
             className={[
               'flex-1 flex items-center gap-1 text-left px-2 py-1 min-w-0',
-              !node.isDirectory && !isMd ? 'opacity-50 cursor-default' : ''
+              !node.isDirectory && !isOpenable ? 'opacity-50 cursor-default' : ''
             ].join(' ')}
             style={{ paddingLeft: `${depth * 12 + 8}px` }}
           >
@@ -427,7 +437,7 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
       <input
         ref={fileInputRef}
         type="file"
-        accept=".md,.markdown,.mdown,.mkd,text/markdown"
+        accept={PICKER_ACCEPT}
         multiple
         hidden
         onChange={(e) => {

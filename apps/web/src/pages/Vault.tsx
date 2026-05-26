@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import type { FileNode, Scope } from '@quill/shared-types'
+import { getFileType, type FileNode, type Scope } from '@quill/shared-types'
 import { AgentPanel } from '../components/AgentPanel'
 import { DownloadMenu } from '../components/DownloadMenu'
 import { Editor } from '../components/Editor'
@@ -163,7 +163,9 @@ export function Vault(): JSX.Element {
     }
     setSelected(node)
     setSidebarOpen(false)
-    setMode('preview')
+    // Non-markdown text files have no preview, so opening them in 'edit'
+    // mode skips a meaningless ModeSwitcher click.
+    setMode(node.isMarkdown ? 'preview' : 'edit')
   }
 
   async function onLogout(): Promise<void> {
@@ -224,8 +226,17 @@ export function Vault(): JSX.Element {
             onPathRenamed={(oldPath, newPath) => {
               // If the renamed path is the open file, fold the new path into
               // selected so the editor header updates without reloading.
+              // Re-derive isMarkdown/isText from the new extension since
+              // rename can flip the file type (e.g. foo.md → foo.txt).
               if (selected && selected.path === oldPath) {
-                setSelected({ ...selected, path: newPath, name: newPath.split('/').pop() ?? newPath })
+                const info = getFileType(newPath)
+                setSelected({
+                  ...selected,
+                  path: newPath,
+                  name: newPath.split('/').pop() ?? newPath,
+                  isMarkdown: info.isMarkdown,
+                  isText: info.isText
+                })
               }
             }}
             onPathDeleted={(path) => {
@@ -260,11 +271,18 @@ export function Vault(): JSX.Element {
           {selected && (
             <>
               <SaveStatusIndicator status={save} dirty={dirty} onSave={handleSave} />
-              <ModeSwitcher value={mode} onChange={setMode} />
-              {mode === 'preview' && (
-                <OutlineSheetButton source={buffer} containerRef={previewScrollRef} />
+              {/* Markdown-specific UI: preview/edit toggle, outline button
+                  on H5, and the markdown→HTML/PDF download menu. Hidden
+                  for plain text / code files where they don't apply. */}
+              {selected.isMarkdown && (
+                <>
+                  <ModeSwitcher value={mode} onChange={setMode} />
+                  {mode === 'preview' && (
+                    <OutlineSheetButton source={buffer} containerRef={previewScrollRef} />
+                  )}
+                  <DownloadMenu filePath={selected.path} content={buffer} />
+                </>
               )}
-              <DownloadMenu filePath={selected.path} content={buffer} />
             </>
           )}
           <button
@@ -299,12 +317,17 @@ export function Vault(): JSX.Element {
             )}
             {!selected && !loadErr && (
               <div className="flex items-center justify-center h-full text-sm text-[var(--ink-faint)]">
-                在左侧选择一个 markdown 文件
+                在左侧选择一个文件
               </div>
             )}
             {selected && !loadErr && (
               mode === 'edit' ? (
-                <Editor value={buffer} onChange={setBuffer} onSave={handleSave} />
+                <Editor
+                  value={buffer}
+                  onChange={setBuffer}
+                  onSave={handleSave}
+                  filePath={selected.path}
+                />
               ) : (
                 <Preview source={buffer} />
               )
@@ -312,8 +335,10 @@ export function Vault(): JSX.Element {
           </div>
           {/* Side outline rail — md+ only, only in preview mode (the
               editor view doesn't have stable heading anchors to scroll
-              to). Hides itself when the document has no headings. */}
-          {selected && !loadErr && mode === 'preview' && (
+              to). Hidden for non-markdown files where Outline has nothing
+              to extract. Hides itself further when the document has no
+              headings. */}
+          {selected?.isMarkdown && !loadErr && mode === 'preview' && (
             <div className="hidden md:block w-48 shrink-0">
               <Outline source={buffer} containerRef={previewScrollRef} />
             </div>

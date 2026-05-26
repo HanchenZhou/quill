@@ -1,37 +1,16 @@
 import { useEffect, useRef } from 'react'
-import { Compartment, EditorState, type Extension } from '@codemirror/state'
+import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { markdown } from '@codemirror/lang-markdown'
-import { javascript } from '@codemirror/lang-javascript'
-import { json } from '@codemirror/lang-json'
-import { html } from '@codemirror/lang-html'
-import { css } from '@codemirror/lang-css'
-import { xml } from '@codemirror/lang-xml'
-import { python } from '@codemirror/lang-python'
-import { java } from '@codemirror/lang-java'
-import { go } from '@codemirror/lang-go'
-import { rust } from '@codemirror/lang-rust'
-import { cpp } from '@codemirror/lang-cpp'
-import { sql } from '@codemirror/lang-sql'
-import { php } from '@codemirror/lang-php'
-import { yaml } from '@codemirror/lang-yaml'
 import {
-  StreamLanguage,
   syntaxHighlighting,
   defaultHighlightStyle,
   foldGutter,
   foldKeymap
 } from '@codemirror/language'
-import { shell } from '@codemirror/legacy-modes/mode/shell'
-import { ruby } from '@codemirror/legacy-modes/mode/ruby'
-import { toml } from '@codemirror/legacy-modes/mode/toml'
-import { lua } from '@codemirror/legacy-modes/mode/lua'
-import { powerShell } from '@codemirror/legacy-modes/mode/powershell'
-import { r } from '@codemirror/legacy-modes/mode/r'
-import { diff } from '@codemirror/legacy-modes/mode/diff'
 import { search } from '@codemirror/search'
 import { oneDark } from '@codemirror/theme-one-dark'
+import { languageExtension } from '@quill/core/codemirror'
 import { getFileType, type FileLanguage } from '@quill/shared-types'
 import type { Theme } from '../types'
 import { usePrefs } from '../state/prefs'
@@ -45,56 +24,6 @@ type Props = {
    *  threaded the path through yet. */
   filePath?: string
   onViewChange?: (view: EditorView | null) => void
-}
-
-function languageExtension(lang: FileLanguage | null): Extension {
-  switch (lang) {
-    case 'markdown':
-      return markdown()
-    case 'javascript':
-      // Covers js/ts/jsx/tsx — lang-javascript handles all four under flags.
-      return javascript({ typescript: true, jsx: true })
-    case 'json':
-      return json()
-    case 'html':
-      return html()
-    case 'css':
-      return css()
-    case 'xml':
-      return xml()
-    case 'python':
-      return python()
-    case 'java':
-      return java()
-    case 'go':
-      return go()
-    case 'rust':
-      return rust()
-    case 'cpp':
-      return cpp()
-    case 'sql':
-      return sql()
-    case 'php':
-      return php()
-    case 'yaml':
-      return yaml()
-    case 'shell':
-      return StreamLanguage.define(shell)
-    case 'ruby':
-      return StreamLanguage.define(ruby)
-    case 'toml':
-      return StreamLanguage.define(toml)
-    case 'lua':
-      return StreamLanguage.define(lua)
-    case 'powershell':
-      return StreamLanguage.define(powerShell)
-    case 'r':
-      return StreamLanguage.define(r)
-    case 'diff':
-      return StreamLanguage.define(diff)
-    default:
-      return []
-  }
 }
 
 function langOf(filePath: string | undefined): FileLanguage | null {
