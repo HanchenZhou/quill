@@ -13,6 +13,7 @@ import type { FileNode, ViewMode } from '../types'
 import { ipc, switchToLocal } from '../lib/ipc'
 import { addRecent, removeRecent } from '../lib/recent'
 import { validateRenameTarget } from '../lib/rename'
+import { joinTreePath, validateNewEntryName } from '../lib/tree-paths'
 import { usePrefs } from './prefs'
 
 type Workspace = {
@@ -262,9 +263,37 @@ type Ctx = {
    *  after the agent creates / writes files so newly-created entries appear
    *  immediately. No-op outside workspace mode. */
   reloadWorkspaceTree: () => Promise<void>
+  /** Create an empty file at `parentPath/name` and refresh the tree. */
+  createFileInTree: (parentPath: string, name: string) => Promise<void>
+  /** Create a directory at `parentPath/name` and refresh the tree. */
+  createFolderInTree: (parentPath: string, name: string) => Promise<void>
+  /** Delete a tree node (file or directory). Closes the editor if the
+   *  deleted path is currently open (or contains it). */
+  deleteTreeNode: (path: string, isDirectory: boolean) => Promise<void>
+  /** Rename any node in the tree (not just the currently open one). If
+   *  the renamed node is the current file, the editor's path is updated. */
+  renameTreeNode: (oldPath: string, newName: string) => Promise<void>
   /** Current pending "open in new window?" prompt, or null. The
    *  OpenChoiceDialog at the App root renders + resolves this. */
   openChoiceRequest: OpenChoiceRequest | null
+  /** Current pending confirm-dialog request, or null. The ConfirmDialog
+   *  at the App root renders + resolves this. */
+  confirmRequest: ConfirmRequest | null
+  /** Show a confirm dialog and resolve with the user's choice. */
+  askConfirm: (args: ConfirmAsk) => Promise<boolean>
+}
+
+export type ConfirmAsk = {
+  title: string
+  message: string
+  /** Style the confirm button red if true (destructive action). */
+  danger?: boolean
+  confirmLabel?: string
+  cancelLabel?: string
+}
+
+export type ConfirmRequest = ConfirmAsk & {
+  resolve: (ok: boolean) => void
 }
 
 const AppContext = createContext<Ctx | null>(null)
@@ -520,6 +549,103 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'REFRESH_TREE', tree })
   }, [])
 
+  // Promise-based confirm dialog (same pattern as askOpenChoice). The
+  // ConfirmDialog at the App root resolves the parked promise.
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null)
+
+  const askConfirm = useCallback(
+    (args: ConfirmAsk) =>
+      new Promise<boolean>((resolve) => {
+        setConfirmRequest({
+          ...args,
+          resolve: (ok) => {
+            setConfirmRequest(null)
+            resolve(ok)
+          }
+        })
+      }),
+    []
+  )
+
+  // True when `filePath` is inside `dirPath` (or equal to it). Used to
+  // decide whether deleting / renaming a directory should also close the
+  // currently-open file.
+  const isInsideDir = (filePath: string, dirPath: string): boolean =>
+    filePath === dirPath ||
+    filePath.startsWith(`${dirPath}/`) ||
+    filePath.startsWith(`${dirPath}\\`)
+
+  const createFileInTree = useCallback(
+    async (parentPath: string, name: string) => {
+      const v = validateNewEntryName(name)
+      if (!v.ok) throw new Error(v.error)
+      const fullPath = joinTreePath(parentPath, v.name)
+      await ipc.vault.write(fullPath, '')
+      await reloadWorkspaceTree()
+    },
+    [reloadWorkspaceTree]
+  )
+
+  const createFolderInTree = useCallback(
+    async (parentPath: string, name: string) => {
+      const v = validateNewEntryName(name)
+      if (!v.ok) throw new Error(v.error)
+      const fullPath = joinTreePath(parentPath, v.name)
+      await ipc.vault.mkdir(fullPath)
+      await reloadWorkspaceTree()
+    },
+    [reloadWorkspaceTree]
+  )
+
+  const deleteTreeNode = useCallback(
+    async (path: string, isDirectory: boolean) => {
+      if (isDirectory) {
+        await ipc.vault.deleteDir(path, true)
+      } else {
+        await ipc.vault.delete(path)
+      }
+      // Close the editor if it was holding the deleted path (or any file
+      // beneath a deleted directory) — leaving the buffer open would let a
+      // subsequent save recreate the file at the old path.
+      const cur = stateRef.current.currentFile
+      if (cur?.path && isInsideDir(cur.path, path)) {
+        dispatch({ type: 'CLOSE_FILE' })
+        removeRecent(cur.path)
+      }
+      await reloadWorkspaceTree()
+    },
+    [reloadWorkspaceTree]
+  )
+
+  const renameTreeNode = useCallback(
+    async (oldPath: string, newName: string) => {
+      const result = validateRenameTarget(oldPath, newName)
+      if (!result.ok) throw new Error(result.error)
+      if (result.newPath === oldPath) return
+      await ipc.vault.rename(oldPath, result.newPath)
+      const cur = stateRef.current.currentFile
+      if (cur?.path === oldPath) {
+        // Renaming the currently open file → patch state to keep the editor
+        // pointed at the new path (no reopen, no buffer churn).
+        dispatch({
+          type: 'RENAME_FILE',
+          oldPath,
+          newPath: result.newPath,
+          newName: result.newName
+        })
+        removeRecent(oldPath)
+        addRecent({ type: 'file', path: result.newPath, name: result.newName })
+      } else if (cur?.path && isInsideDir(cur.path, oldPath)) {
+        // Renaming a parent directory of the open file → safest to close
+        // it; the stale path under the old directory name would be broken.
+        dispatch({ type: 'CLOSE_FILE' })
+        removeRecent(cur.path)
+      }
+      await reloadWorkspaceTree()
+    },
+    [reloadWorkspaceTree]
+  )
+
   const renameCurrentFile = useCallback(async (newName: string) => {
     const cur = stateRef.current.currentFile
     if (!cur?.path) throw new Error('未保存的文件不能重命名')
@@ -587,7 +713,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       renameCurrentFile,
       reloadCurrentFile,
       reloadWorkspaceTree,
-      openChoiceRequest
+      createFileInTree,
+      createFolderInTree,
+      deleteTreeNode,
+      renameTreeNode,
+      openChoiceRequest,
+      confirmRequest,
+      askConfirm
     }),
     [
       state,
@@ -607,7 +739,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       renameCurrentFile,
       reloadCurrentFile,
       reloadWorkspaceTree,
-      openChoiceRequest
+      createFileInTree,
+      createFolderInTree,
+      deleteTreeNode,
+      renameTreeNode,
+      openChoiceRequest,
+      confirmRequest,
+      askConfirm
     ]
   )
 

@@ -9,6 +9,7 @@ import { StatusBar } from './components/StatusBar'
 import { DragOverlay } from './components/DragOverlay'
 import { AgentPanel } from './components/AgentPanel'
 import { OpenChoiceDialog } from './components/OpenChoiceDialog'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { RemoteLoginDialog } from './components/RemoteLoginDialog'
 import { ipc, switchToRemote } from './lib/ipc'
 
@@ -23,7 +24,8 @@ function readAgentOpen(): boolean {
 }
 
 function Shell() {
-  const { state, mode, save, openChoiceRequest, openRemoteAt, exitRemote } = useApp()
+  const { state, mode, save, openChoiceRequest, confirmRequest, openRemoteAt, exitRemote } =
+    useApp()
   const [agentOpen, setAgentOpen] = useState<boolean>(() => readAgentOpen())
   // Login dialog is owned by Shell so both EmptyState and the footer cloud
   // icon can trigger it through one shared handler.
@@ -63,34 +65,6 @@ function Shell() {
     setRemoteDialogInitialUrl(url)
     setRemoteDialogOpen(true)
   }, [openRemoteAt])
-
-  // On first launch in this session, try to restore a remote workspace
-  // if the user previously connected. Validates the stored token against
-  // /api/auth/me before opening — silently falls back to empty state on
-  // 401 (token expired) or network error.
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      const url = await ipc.remote.getUrl()
-      const token = await ipc.remote.getToken()
-      if (!url || !token || cancelled) return
-      try {
-        const res = await fetch(`${url}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (!res.ok || cancelled) return
-        switchToRemote({ url, getToken: () => ipc.remote.getToken() })
-        await openRemoteAt(url)
-      } catch {
-        /* network failure — user can manually reconnect from empty state */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-    // Intentionally run once on mount; openRemoteAt is stable from useCallback.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   useEffect(() => {
     try {
@@ -145,6 +119,7 @@ function Shell() {
           onResolve={openChoiceRequest.resolve}
         />
       )}
+      {confirmRequest && <ConfirmDialog request={confirmRequest} />}
       {remoteDialogOpen && (
         <RemoteLoginDialog
           initialUrl={remoteDialogInitialUrl ?? undefined}

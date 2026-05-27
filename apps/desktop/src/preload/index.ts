@@ -116,7 +116,11 @@ const api = {
     rename: (oldPath: string, newPath: string): Promise<void> =>
       ipcRenderer.invoke('fs:rename', oldPath, newPath),
     listDir: (path: string): Promise<FileNode[]> => ipcRenderer.invoke('fs:listDir', path),
-    stat: (path: string): Promise<FileStat> => ipcRenderer.invoke('fs:stat', path)
+    stat: (path: string): Promise<FileStat> => ipcRenderer.invoke('fs:stat', path),
+    mkdir: (path: string): Promise<void> => ipcRenderer.invoke('fs:mkdir', path),
+    delete: (path: string): Promise<void> => ipcRenderer.invoke('fs:delete', path),
+    deleteDir: (path: string, recursive: boolean): Promise<void> =>
+      ipcRenderer.invoke('fs:deleteDir', path, recursive)
   },
   themes: {
     list: (): Promise<Array<{ filename: string; raw: unknown }>> =>
