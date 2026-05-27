@@ -66,34 +66,6 @@ function Shell() {
     setRemoteDialogOpen(true)
   }, [openRemoteAt])
 
-  // On first launch in this session, try to restore a remote workspace
-  // if the user previously connected. Validates the stored token against
-  // /api/auth/me before opening — silently falls back to empty state on
-  // 401 (token expired) or network error.
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      const url = await ipc.remote.getUrl()
-      const token = await ipc.remote.getToken()
-      if (!url || !token || cancelled) return
-      try {
-        const res = await fetch(`${url}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (!res.ok || cancelled) return
-        switchToRemote({ url, getToken: () => ipc.remote.getToken() })
-        await openRemoteAt(url)
-      } catch {
-        /* network failure — user can manually reconnect from empty state */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-    // Intentionally run once on mount; openRemoteAt is stable from useCallback.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   useEffect(() => {
     try {
       window.localStorage.setItem(AGENT_OPEN_KEY, agentOpen ? '1' : '0')
