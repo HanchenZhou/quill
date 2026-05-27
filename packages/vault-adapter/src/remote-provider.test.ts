@@ -37,3 +37,34 @@ describe('RemoteVault onUnauthorized', () => {
     await expect(vault.list('')).rejects.toBeInstanceOf(UnauthorizedError)
   })
 })
+
+describe('RemoteVault credentials mode', () => {
+  afterEach(() => {
+    globalThis.fetch = realFetch
+  })
+
+  test('omits credentials when Bearer headers are present (cross-origin desktop)', async () => {
+    let seen: RequestInit | undefined
+    stubFetch((_input, init) => {
+      seen = init
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+    const vault = new RemoteVault({
+      baseUrl: 'http://example.com',
+      getAuthHeaders: () => ({ Authorization: 'Bearer t' })
+    })
+    await vault.list('')
+    expect(seen?.credentials).toBe('omit')
+  })
+
+  test('keeps credentials: include for cookie mode (same-origin web)', async () => {
+    let seen: RequestInit | undefined
+    stubFetch((_input, init) => {
+      seen = init
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+    const vault = new RemoteVault()
+    await vault.list('')
+    expect(seen?.credentials).toBe('include')
+  })
+})
