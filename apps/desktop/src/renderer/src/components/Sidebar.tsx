@@ -45,6 +45,7 @@ export function Sidebar() {
       <div className="flex-1 overflow-auto py-2">
         <FileTree
           nodes={state.workspace.tree}
+          rootParentPath={state.workspace.kind === 'local' ? state.workspace.rootPath : ''}
           currentPath={state.currentFile?.path ?? null}
           dirty={dirty}
           onSelect={(p) => void openFileAt(p)}

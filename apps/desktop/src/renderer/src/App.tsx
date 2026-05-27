@@ -9,6 +9,7 @@ import { StatusBar } from './components/StatusBar'
 import { DragOverlay } from './components/DragOverlay'
 import { AgentPanel } from './components/AgentPanel'
 import { OpenChoiceDialog } from './components/OpenChoiceDialog'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { RemoteLoginDialog } from './components/RemoteLoginDialog'
 import { ipc, switchToRemote } from './lib/ipc'
 
@@ -23,7 +24,8 @@ function readAgentOpen(): boolean {
 }
 
 function Shell() {
-  const { state, mode, save, openChoiceRequest, openRemoteAt, exitRemote } = useApp()
+  const { state, mode, save, openChoiceRequest, confirmRequest, openRemoteAt, exitRemote } =
+    useApp()
   const [agentOpen, setAgentOpen] = useState<boolean>(() => readAgentOpen())
   // Login dialog is owned by Shell so both EmptyState and the footer cloud
   // icon can trigger it through one shared handler.
@@ -145,6 +147,7 @@ function Shell() {
           onResolve={openChoiceRequest.resolve}
         />
       )}
+      {confirmRequest && <ConfirmDialog request={confirmRequest} />}
       {remoteDialogOpen && (
         <RemoteLoginDialog
           initialUrl={remoteDialogInitialUrl ?? undefined}

@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 import { LocalProvider, type QuillFsBridge } from './local-provider'
-import { NotSupportedError } from './types'
 
 function makeBridge(): {
   bridge: QuillFsBridge
@@ -33,6 +32,15 @@ function makeBridge(): {
     stat: async (path) => {
       calls.push({ method: 'stat', args: [path] })
       return { isFile: true, isDirectory: false, size: 42, mtime: 100 }
+    },
+    mkdir: async (path) => {
+      calls.push({ method: 'mkdir', args: [path] })
+    },
+    delete: async (path) => {
+      calls.push({ method: 'delete', args: [path] })
+    },
+    deleteDir: async (path, recursive) => {
+      calls.push({ method: 'deleteDir', args: [path, recursive] })
     }
   }
   return { bridge, calls }
@@ -91,23 +99,24 @@ describe('LocalProvider', () => {
     expect(result).toEqual({ isFile: true, isDirectory: false, size: 42, mtime: 100 })
   })
 
-  test('mkdir rejects with NotSupportedError (no IPC backing yet)', async () => {
-    const { bridge } = makeBridge()
+  test('mkdir forwards to bridge.mkdir', async () => {
+    const { bridge, calls } = makeBridge()
     const provider = new LocalProvider(bridge)
-    await expect(provider.mkdir('foo')).rejects.toBeInstanceOf(NotSupportedError)
+    await provider.mkdir('/x/sub')
+    expect(calls).toEqual([{ method: 'mkdir', args: ['/x/sub'] }])
   })
 
-  test('delete rejects with NotSupportedError', async () => {
-    const { bridge } = makeBridge()
+  test('delete forwards to bridge.delete', async () => {
+    const { bridge, calls } = makeBridge()
     const provider = new LocalProvider(bridge)
-    await expect(provider.delete('foo.md')).rejects.toBeInstanceOf(NotSupportedError)
+    await provider.delete('/x/a.md')
+    expect(calls).toEqual([{ method: 'delete', args: ['/x/a.md'] }])
   })
 
-  test('deleteDir rejects with NotSupportedError', async () => {
-    const { bridge } = makeBridge()
+  test('deleteDir forwards path + recursive flag to bridge.deleteDir', async () => {
+    const { bridge, calls } = makeBridge()
     const provider = new LocalProvider(bridge)
-    await expect(provider.deleteDir('foo', true)).rejects.toBeInstanceOf(
-      NotSupportedError
-    )
+    await provider.deleteDir('/x/sub', true)
+    expect(calls).toEqual([{ method: 'deleteDir', args: ['/x/sub', true] }])
   })
 })

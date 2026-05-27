@@ -171,6 +171,28 @@ export function registerIpc(): void {
     return await scanDir(rootPath)
   })
 
+  ipcMain.handle('fs:mkdir', async (_evt, path: string) => {
+    // Refuse if anything already exists at the target — the tree UI surfaces
+    // this as a friendly "name already used" instead of silently no-op'ing.
+    const exists = await fs
+      .stat(path)
+      .then(() => true)
+      .catch((err: NodeJS.ErrnoException) => {
+        if (err.code === 'ENOENT') return false
+        throw err
+      })
+    if (exists) throw new Error('TARGET_EXISTS')
+    await fs.mkdir(path)
+  })
+
+  ipcMain.handle('fs:delete', async (_evt, path: string) => {
+    await fs.unlink(path)
+  })
+
+  ipcMain.handle('fs:deleteDir', async (_evt, path: string, recursive: boolean) => {
+    await fs.rm(path, { recursive, force: false })
+  })
+
   ipcMain.handle('fs:stat', async (_evt, path: string) => {
     const s = await fs.stat(path)
     return {
