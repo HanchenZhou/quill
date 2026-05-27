@@ -105,14 +105,22 @@ export class RemoteVault implements VaultProvider {
 
   /** Merge caller-supplied init with the auth headers + credentials.
    *  Headers can come in as Headers/array/record — preserve the user's
-   *  values and let auth headers override only when not already set. */
+   *  values and let auth headers override only when not already set.
+   *
+   *  Bearer mode (auth headers present) gets `credentials: 'omit'`:
+   *  cross-origin servers that return `Access-Control-Allow-Origin: *`
+   *  reject preflight when credentials mode is 'include', and Bearer
+   *  tokens don't need cookies anyway. Cookie mode (no auth headers,
+   *  same-origin web) keeps `include` so the browser attaches the
+   *  session cookie. */
   private async withAuth(init?: RequestInit): Promise<RequestInit> {
     const headers = new Headers(init?.headers)
     const auth = await this.getAuthHeaders()
     for (const [k, v] of Object.entries(auth)) {
       if (!headers.has(k)) headers.set(k, v)
     }
-    return { ...init, headers, credentials: 'include' }
+    const credentials = Object.keys(auth).length > 0 ? 'omit' : 'include'
+    return { ...init, headers, credentials }
   }
 
   private async call<T>(path: string, init?: RequestInit): Promise<T> {
