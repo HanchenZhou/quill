@@ -75,6 +75,7 @@ export const ipc = {
     folderPath?: string
     newFile?: boolean
   }): Promise<void> => window.quill.app.openInNewWindow(args),
+  setCurrentFile: (path: string | null): void => window.quill.app.setCurrentFile(path),
   openSettingsWindow: (): Promise<void> => window.quill.app.openSettings(),
   getAppVersion: (): Promise<string> => window.quill.app.version(),
   get vault(): VaultProvider {

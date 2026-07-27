@@ -1,5 +1,6 @@
 import { BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
+import { FileWindowRouter } from './file-window-router'
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL
 
@@ -10,6 +11,7 @@ export type InitialAction =
 
 export const windows = new Set<BrowserWindow>()
 const pendingActions = new WeakMap<BrowserWindow, InitialAction[]>()
+const fileWindows = new FileWindowRouter<BrowserWindow>()
 
 // Singleton settings window — focus existing instead of creating duplicate.
 let settingsWindow: BrowserWindow | null = null
@@ -48,12 +50,16 @@ export function createWindow(opts: { initial?: InitialAction } = {}): BrowserWin
   windows.add(win)
   if (opts.initial) {
     pendingActions.set(win, [opts.initial])
+    if (opts.initial.type === 'open-file') {
+      fileWindows.setFile(win, opts.initial.path)
+    }
   }
 
   win.on('ready-to-show', () => win.show())
   win.on('closed', () => {
     windows.delete(win)
     pendingActions.delete(win)
+    fileWindows.remove(win)
   })
 
   win.webContents.on('did-finish-load', () => flushPendingActions(win))
@@ -70,6 +76,16 @@ export function createWindow(opts: { initial?: InitialAction } = {}): BrowserWin
   }
 
   return win
+}
+
+export function openFileWindow(path: string): BrowserWindow {
+  return fileWindows.open(path, () =>
+    createWindow({ initial: { type: 'open-file', path } })
+  )
+}
+
+export function setWindowFile(win: BrowserWindow, path: string | null): void {
+  fileWindows.setFile(win, path)
 }
 
 export function openSettingsWindow(): BrowserWindow {

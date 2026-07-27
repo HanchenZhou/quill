@@ -63,6 +63,8 @@ const api = {
       folderPath?: string
       newFile?: boolean
     }): Promise<void> => ipcRenderer.invoke('app:openInNewWindow', args),
+    setCurrentFile: (path: string | null): void =>
+      ipcRenderer.send('app:setCurrentFile', path),
     openSettings: (): Promise<void> => ipcRenderer.invoke('app:openSettings'),
     version: (): Promise<string> => ipcRenderer.invoke('app:version')
   },
