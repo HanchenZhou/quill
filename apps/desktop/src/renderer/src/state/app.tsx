@@ -328,6 +328,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const stateRef = useRef(state)
   stateRef.current = state
+  const skipInitialEmptyFileReportRef = useRef(ipc.hasInitialAction())
+
+  // Keep the main process aware of the local file displayed by this
+  // BrowserWindow so a repeated Finder open can focus it instead of
+  // creating a duplicate. The main process already registers an initial
+  // open-file action, so skip the renderer's first empty-state report.
+  useEffect(() => {
+    const path =
+      state.workspace?.kind === 'remote' ? null : (state.currentFile?.path ?? null)
+    if (
+      skipInitialEmptyFileReportRef.current &&
+      path === null &&
+      state.workspace === null
+    ) {
+      skipInitialEmptyFileReportRef.current = false
+      return
+    }
+    skipInitialEmptyFileReportRef.current = false
+    ipc.setCurrentFile(path)
+  }, [state.currentFile?.path, state.workspace?.kind])
 
   // Snapshot of the local workspace / file the user had open right before
   // entering remote mode. Used by exitRemote so the cloud-icon "back"

@@ -3,7 +3,12 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { createWindow, openSettingsWindow, type InitialAction } from './windows'
+import {
+  createWindow,
+  openSettingsWindow,
+  setWindowFile,
+  type InitialAction
+} from './windows'
 import {
   listProviders,
   upsertProvider,
@@ -248,6 +253,11 @@ export function registerIpc(): void {
       createWindow({ initial })
     }
   )
+
+  ipcMain.on('app:setCurrentFile', (evt, path: string | null) => {
+    const win = BrowserWindow.fromWebContents(evt.sender)
+    if (win) setWindowFile(win, path)
+  })
 
   ipcMain.handle('app:openSettings', async () => {
     openSettingsWindow()

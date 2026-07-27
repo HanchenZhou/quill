@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { registerIpc } from './ipc'
 import { buildMenu } from './menu'
-import { createWindow, windows } from './windows'
+import { createWindow, openFileWindow, windows } from './windows'
 
 // Override the app name so dev builds don't show "@quill/desktop" in
 // the macOS app menu / Dock / about dialog. `app.getName()` defaults to
@@ -16,15 +16,15 @@ app.setName('Quill')
 // before `whenReady` fires. Drained in whenReady().
 const pendingOpenAtStartup: string[] = []
 
-// Finder "Open With" / drop-on-dock / double-click .md → always spawn a fresh
-// window so the user's existing work isn't disturbed.
+// Finder "Open With" / drop-on-dock / double-click .md → focus the window
+// already showing that file, or create a new one for a different file.
 app.on('open-file', (event, path) => {
   event.preventDefault()
   if (!app.isReady()) {
     pendingOpenAtStartup.push(path)
     return
   }
-  createWindow({ initial: { type: 'open-file', path } })
+  openFileWindow(path)
 })
 
 app.whenReady().then(() => {
@@ -33,7 +33,7 @@ app.whenReady().then(() => {
 
   if (pendingOpenAtStartup.length > 0) {
     for (const path of pendingOpenAtStartup) {
-      createWindow({ initial: { type: 'open-file', path } })
+      openFileWindow(path)
     }
     pendingOpenAtStartup.length = 0
   } else {
